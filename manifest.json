@@ -1,0 +1,37 @@
+{
+    "manifest_version": 3,
+    "name": "Jira Diff Highlighter",
+    "version": "1.0",
+    "description": "Improves readability of Jira ticket diffs.",
+    "permissions": [
+      "activeTab",
+      "storage"
+    ],
+    "background": {
+      "service_worker": "background.js"
+    },
+    "content_scripts": [
+      {
+        "matches": [
+            "*://*.atlassian.net/jira/*",
+            "*://*.atlassian.net/browse/*"
+        ],
+        "js": ["diff_match_patch.js", "content.js"],
+        "css": ["styles.css"]
+      }
+    ],
+    "action": {
+      "default_popup": "popup.html",
+      "default_icon": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+      }
+    },
+    "icons": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  }
+  
