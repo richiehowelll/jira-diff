@@ -19,7 +19,7 @@
             "*://*.atlassian.net/jira/*",
             "*://*.atlassian.net/browse/*"
         ],
-        "js": ["diff_match_patch.js", "content.js"],
+        "js": ["lib/diff_match_patch.js", "content.js"],
         "css": ["styles.css"]
       }
     ],
