@@ -1,6 +1,6 @@
-// Check if the enhancer is enabled before running
-chrome.storage.sync.get('enhancerEnabled', function(data) {
-    if (data.enhancerEnabled !== false) {
+// Check if the Highlighter is enabled before running
+chrome.storage.sync.get('highlighterEnabled', function(data) {
+    if (data.highlighterEnabled !== false) {
       enhanceDiff();
       setupObserver();
     }
@@ -32,8 +32,8 @@ chrome.storage.sync.get('enhancerEnabled', function(data) {
   }
   
   function enhanceDiff() {
-    chrome.storage.sync.get('enhancerEnabled', function(data) {
-      if (data.enhancerEnabled !== false) {
+    chrome.storage.sync.get('highlighterEnabled', function(data) {
+      if (data.highlighterEnabled !== false) {
         const diffContainers = findDiffContainers();
         
         diffContainers.forEach((container, index) => {
@@ -203,8 +203,8 @@ chrome.storage.sync.get('enhancerEnabled', function(data) {
   // Listen for messages from the popup and background script
   chrome.runtime.onMessage.addListener(
     function(request, sender, sendResponse) {
-      if (request.action === "toggleEnhancer") {
-        chrome.storage.sync.set({enhancerEnabled: request.enabled}, function() {
+      if (request.action === "toggleHighlighter") {
+        chrome.storage.sync.set({highlighterEnabled: request.enabled}, function() {
           if (request.enabled) {
             enhanceDiff();
             setupObserver();
@@ -217,9 +217,9 @@ chrome.storage.sync.get('enhancerEnabled', function(data) {
           sendResponse({status: "success"});
         });
         return true; // Indicates that the response is sent asynchronously
-      } else if (request.action === "checkEnhancerState") {
-        chrome.storage.sync.get('enhancerEnabled', function(data) {
-          if (data.enhancerEnabled) {
+      } else if (request.action === "checkHighlighterState") {
+        chrome.storage.sync.get('highlighterEnabled', function(data) {
+          if (data.highlighterEnabled) {
             enhanceDiff();
             setupObserver();
           } else {
