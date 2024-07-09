@@ -44,19 +44,28 @@ function findDiffContainers() {
 function enhanceDiff() {
     const diffContainers = findDiffContainers();
     
-    diffContainers.forEach(container => {
-        if (container.querySelector('.enhanced-diff')) return; // Skip if already enhanced
+    diffContainers.forEach((container, index) => {
+      if (container.querySelector('.enhanced-diff')) return; // Skip if already enhanced
   
-        const oldText = container.children[0].textContent;
-        const newText = container.children[2].textContent;
-        
-        const enhancedDiff = createEnhancedDiff(oldText, newText);
-        
-        // Replace the original content with the enhanced diff
-        container.innerHTML = '';
-        container.appendChild(enhancedDiff);
+      const containerId = `diff-container-${Date.now()}-${index}`;
+      container.id = containerId;
+  
+      // Store the original content
+      const originalContent = container.innerHTML;
+      chrome.storage.local.set({[containerId]: originalContent}, function() {
+        console.log('Original content saved for', containerId);
+      });
+  
+      const oldText = container.children[0].textContent;
+      const newText = container.children[2].textContent;
+      
+      const enhancedDiff = createEnhancedDiff(oldText, newText);
+      
+      // Replace the original content with the enhanced diff
+      container.innerHTML = '';
+      container.appendChild(enhancedDiff);
     });
-}
+  }
   
 function createEnhancedDiff(oldText, newText) {
     const diffContainer = document.createElement('div');
@@ -193,10 +202,23 @@ chrome.runtime.onMessage.addListener(
   
 function removeEnhancements() {
     const enhancedDiffs = document.querySelectorAll('.enhanced-diff');
-    enhancedDiffs.forEach(diff => {
-        const originalContainer = diff.closest('div[class*="_1e0c1txw"]');
-        if (originalContainer) {
-            originalContainer.innerHTML = originalContainer.dataset.originalContent;
-        }
+    enhancedDiffs.forEach(enhancedDiff => {
+      const parentContainer = enhancedDiff.closest('div[id^="diff-container-"]');
+      if (parentContainer) {
+        const containerId = parentContainer.id;
+        chrome.storage.local.get(containerId, function(result) {
+          if (result[containerId]) {
+            parentContainer.innerHTML = result[containerId];
+            // Clean up stored content
+            chrome.storage.local.remove(containerId);
+          } else {
+            // If we can't find the original content, just remove the enhanced diff
+            enhancedDiff.remove();
+          }
+        });
+      } else {
+        // If we can't find the parent container, just remove the enhanced diff
+        enhancedDiff.remove();
+      }
     });
-}
+  }
