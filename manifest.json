@@ -19,12 +19,12 @@
             "*://*.atlassian.net/jira/*",
             "*://*.atlassian.net/browse/*"
         ],
-        "js": ["lib/diff_match_patch.js", "content.js"],
-        "css": ["styles.css"]
+        "js": ["lib/diff_match_patch.js", "content/content.js"],
+        "css": ["content/styles.css"]
       }
     ],
     "action": {
-      "default_popup": "popup.html",
+      "default_popup": "popup/popup.html",
       "default_icon": {
         "16": "icons/icon16.png",
         "48": "icons/icon48.png",
