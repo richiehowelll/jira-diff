@@ -44,9 +44,7 @@ function enhanceDiff() {
     
         // Store the original content
         const originalContent = container.innerHTML;
-        chrome.storage.local.set({[containerId]: originalContent}, function() {
-          console.log('Original content saved for', containerId);
-        });
+        chrome.storage.local.set({[containerId]: originalContent});
     
         const oldText = container.children[0].textContent;
         const newText = container.children[2].textContent;
