@@ -1,15 +1,27 @@
-// popup.js
-document.addEventListener('DOMContentLoaded', () => {
-    const toggleHighlighting = document.getElementById('toggleHighlighting');
-
-    chrome.storage.sync.get('highlightingEnabled', (data) => {
-        toggleHighlighting.checked = data.highlightingEnabled !== false;
+document.addEventListener('DOMContentLoaded', function() {
+    var toggleSwitch = document.getElementById('enhancerToggle');
+  
+    // Load the current state
+    chrome.storage.sync.get('enhancerEnabled', function(data) {
+        toggleSwitch.checked = data.enhancerEnabled !== false;
     });
-
-    toggleHighlighting.addEventListener('change', () => {
-        chrome.storage.sync.set({ highlightingEnabled: toggleHighlighting.checked });
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            chrome.tabs.sendMessage(tabs[0].id, { highlightingEnabled: toggleHighlighting.checked });
+  
+    // Save the state and send message when the toggle is clicked
+    toggleSwitch.addEventListener('change', function() {
+        const isEnabled = this.checked;
+        chrome.storage.sync.set({enhancerEnabled: isEnabled}, function() {
+            console.log('Enhancer enabled: ' + isEnabled);
+        });
+      
+        // Send message to content script
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.tabs.sendMessage(tabs[0].id, {action: "toggleEnhancer", enabled: isEnabled}, function(response) {
+                if (chrome.runtime.lastError) {
+                    console.error(chrome.runtime.lastError);
+                } else if (response && response.status === "success") {
+                    console.log("Toggle successful");
+                }
+            });
         });
     });
 });

@@ -1,32 +1,82 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Jira Diff Highlighter</title>
-    <style>
-        body {
-            width: 200px;
-            font-family: Arial, sans-serif;
-        }
-        h1 {
-            font-size: 16px;
-            text-align: center;
-        }
-        .options {
-            margin: 10px 0;
-        }
-        .option-label {
-            display: block;
-            margin-bottom: 5px;
-        }
-    </style>
+  <title>Jira Diff Enhancer</title>
+  <style>
+    body {
+      width: 300px;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 34px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 26px;
+      width: 26px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #2196F3;
+    }
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    .toggle-label {
+      margin-left: 10px;
+    }
+    .coffee-link {
+      display: block;
+      margin-top: 15px;
+      text-align: center;
+    }
+  </style>
 </head>
 <body>
-    <h1>Jira Diff Highlighter</h1>
-    <div class="options">
-        <label class="option-label">
-            <input type="checkbox" id="toggleHighlighting" checked> Enable Highlighting
-        </label>
-    </div>
-    <script src="popup.js"></script>
+  <h1>Jira Diff Enhancer</h1>
+  <div class="toggle-container">
+    <label class="toggle-switch">
+      <input type="checkbox" id="enhancerToggle">
+      <span class="slider"></span>
+    </label>
+    <span class="toggle-label">Enable Diff Enhancement</span>
+  </div>
+  <p>Toggle the switch to enable or disable the Jira diff enhancement feature.</p>
+  <a href="https://www.buymeacoffee.com/richiehowelll" target="_blank" class="coffee-link">Buy me a coffee</a>
+  <script src="popup.js"></script>
 </body>
 </html>

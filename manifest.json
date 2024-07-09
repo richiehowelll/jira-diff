@@ -1,11 +1,12 @@
 {
     "manifest_version": 3,
-    "name": "Jira Diff Highlighter",
+    "name": "Jira Diff Enhancer",
     "version": "1.0",
     "description": "Improves readability of Jira ticket diffs.",
     "permissions": [
       "activeTab",
-      "storage"
+      "storage",
+      "tabs"
     ],
     "background": {
       "service_worker": "background.js"
