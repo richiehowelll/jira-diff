@@ -1,4 +1,9 @@
 chrome.runtime.onInstalled.addListener(async () => {
+  if (!chrome.runtime?.id) {
+    console.error('Extension context invalidated during installation.');
+    return;
+  }
+  
   for (const cs of chrome.runtime.getManifest().content_scripts) {
     for (const tab of await chrome.tabs.query({url: cs.matches})) {
       if (tab.url.match(/(chrome|chrome-extension):\/\//gi)) {
@@ -15,6 +20,11 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 chrome.tabs.onActivated.addListener(function(activeInfo) {
   chrome.tabs.get(activeInfo.tabId, function(tab) {
+    if (!chrome.runtime?.id) {
+      console.error('Extension context invalidated during tab activation.');
+      return;
+    }
+    
     if (tab.url && (tab.url.includes('atlassian.net/jira') || tab.url.includes('atlassian.net/browse'))) {
       chrome.tabs.sendMessage(tab.id, {action: "checkExtensionState"});
     }

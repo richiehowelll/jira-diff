@@ -1,6 +1,6 @@
 // Check if the extension is enabled before running
 chrome.storage.sync.get('extensionEnabled', function(data) {
-  if (data.extensionEnabled !== false) {
+  if (chrome.runtime?.id && data.extensionEnabled !== false) {
     enhanceDiff();
     setupObserver();
   }
@@ -33,7 +33,7 @@ function findDiffContainers() {
 
 function enhanceDiff() {
   chrome.storage.sync.get('extensionEnabled', function(data) {
-    if (data.extensionEnabled !== false) {
+    if (chrome.runtime?.id && data.extensionEnabled !== false) {
       const diffContainers = findDiffContainers();
       
       diffContainers.forEach((container, index) => {
@@ -203,7 +203,7 @@ chrome.runtime.onMessage.addListener(
   function(request, sender, sendResponse) {
     if (request.action === "toggleExtension") {
       chrome.storage.sync.set({extensionEnabled: request.enabled}, function() {
-        if (request.enabled) {
+        if (chrome.runtime?.id && request.enabled) {
           enhanceDiff();
           setupObserver();
         } else {
@@ -217,7 +217,7 @@ chrome.runtime.onMessage.addListener(
       return true; // Indicates that the response is sent asynchronously
     } else if (request.action === "checkExtensionState") {
       chrome.storage.sync.get('extensionEnabled', function(data) {
-        if (data.extensionEnabled) {
+        if (chrome.runtime?.id && data.extensionEnabled) {
           enhanceDiff();
           setupObserver();
         } else {
