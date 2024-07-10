@@ -1,4 +1,3 @@
-// Check if the extension is enabled before running
 chrome.storage.sync.get('extensionEnabled', function(data) {
   if (chrome.runtime?.id && data.extensionEnabled !== false) {
     enhanceDiff();
@@ -42,7 +41,6 @@ function enhanceDiff() {
         const containerId = `diff-container-${Date.now()}-${index}`;
         container.id = containerId;
     
-        // Store the original content
         const originalContent = container.innerHTML;
         chrome.storage.local.set({[containerId]: originalContent});
     
@@ -51,7 +49,6 @@ function enhanceDiff() {
         
         const enhancedDiff = createEnhancedDiff(oldText, newText);
         
-        // Replace the original content with the enhanced diff
         container.innerHTML = '';
         container.appendChild(enhancedDiff);
       });
@@ -163,7 +160,6 @@ function formatText(text) {
     .join('');
 }
 
-// Debounce the enhanceDiff function
 const debouncedEnhanceDiff = debounce(enhanceDiff, 250);
 
 function setupObserver() {
@@ -214,7 +210,7 @@ chrome.runtime.onMessage.addListener(
         }
         sendResponse({status: "success"});
       });
-      return true; // Indicates that the response is sent asynchronously
+      return true;
     } else if (request.action === "checkExtensionState") {
       chrome.storage.sync.get('extensionEnabled', function(data) {
         if (chrome.runtime?.id && data.extensionEnabled) {
