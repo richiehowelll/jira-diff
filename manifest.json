@@ -12,12 +12,13 @@
     "background": {
       "service_worker": "background.js"
     },
-    "host_permissions": ["<all_urls>"],
+    "host_permissions": [
+      "*://*.atlassian.net/*"
+    ],
     "content_scripts": [
       {
         "matches": [
-            "*://*.atlassian.net/jira/*",
-            "*://*.atlassian.net/browse/*"
+          "*://*.atlassian.net/*"
         ],
         "js": ["lib/diff_match_patch.js", "content/content.js"],
         "css": ["content/styles.css"]
