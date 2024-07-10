@@ -12,7 +12,7 @@ Jira Diff Highlighter is a Chrome extension that enhances the readability of Jir
 
 ## Installation
 
-1. Visit the [Chrome Web Store](https://chrome.google.com/webstore).
+1. Visit the [Chrome Web Store](https://chromewebstore.google.com/detail/jira-diff-highlighter/imlebnoogjdcbkaaighofkpfciamehni).
 2. Click "Add to Chrome" to install the extension.
 3. Once installed, navigate to any Jira issue with description changes to see the enhanced diff view.
 
