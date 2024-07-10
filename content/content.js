@@ -32,8 +32,13 @@ const DiffHighlighter = {
           const originalContent = container.innerHTML;
           await chrome.storage.local.set({[containerId]: originalContent});
       
-          const oldText = container.children[0].textContent;
-          const newText = container.children[2].textContent;
+          const oldText = container.children[0]?.textContent || '';
+          const newText = container.children[2]?.textContent || '';
+  
+          if (!oldText || !newText) {
+            console.error('Error: Expected child elements not found in diff container');
+            continue;
+          }
           
           const enhancedDiff = this.createEnhancedDiff(oldText, newText);
           
