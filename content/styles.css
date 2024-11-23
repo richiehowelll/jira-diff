@@ -19,6 +19,7 @@
   .old-text {
     background-color: #fff5f5;
     margin-right: 5px;
+    resize: horizontal;
   }
   
   .new-text {
