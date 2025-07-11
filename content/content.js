@@ -1,6 +1,10 @@
-const isExtensionValid = () => {
-  return chrome.runtime && chrome.runtime.id;
-};
+/* ---------- cross-browser shim ---------- */
+if (typeof browser !== 'undefined' && typeof chrome === 'undefined') {
+  globalThis.chrome = browser;
+}
+/* --------------------------------------- */
+
+const isExtensionValid = () => chrome.runtime && chrome.runtime.id;
 
 const DiffHighlighter = {
   async init() {
