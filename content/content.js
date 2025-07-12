@@ -4,6 +4,8 @@ if (typeof browser !== 'undefined' && typeof chrome === 'undefined') {
 }
 /* --------------------------------------- */
 
+const appendHTML = (el, html) => el.insertAdjacentHTML('beforeend', html);
+
 const isExtensionValid = () => chrome.runtime && chrome.runtime.id;
 
 const DiffHighlighter = {
@@ -46,7 +48,7 @@ const DiffHighlighter = {
           
           const enhancedDiff = this.createEnhancedDiff(oldText, newText);
           
-          container.innerHTML = '';
+          container.textContent = '';
           container.appendChild(enhancedDiff);
         }
       }
@@ -108,24 +110,24 @@ const DiffHighlighter = {
       switch(operation) {
         case 0: // DIFF_EQUAL
           if (isLargeInsertion) {
-            oldContainer.innerHTML += `<div class="large-change-indicator">Large insertion (${insertionBuffer.length} characters)</div>`;
-            newContainer.innerHTML += `<div class="large-change">${insertionBuffer}</div>`;
+            appendHTML(oldContainer, `<div class="large-change-indicator">Large insertion (${insertionBuffer.length} characters)</div>`);
+            appendHTML(newContainer, `<div class="large-change">${insertionBuffer}</div>`);
             isLargeInsertion = false;
             insertionBuffer = '';
           }
-          oldContainer.innerHTML += formattedText;
-          newContainer.innerHTML += formattedText;
+          appendHTML(oldContainer, formattedText);
+          appendHTML(newContainer, formattedText);
           break;
         case -1: // DIFF_DELETE
-          oldContainer.innerHTML += `<span class="deleted">${formattedText}</span>`;
+          appendHTML(oldContainer, `<span class="deleted">${formattedText}</span>`);
           break;
         case 1: // DIFF_INSERT
           if (text.length > 50) {
             isLargeInsertion = true;
             insertionBuffer += formattedText;
           } else {
-            newContainer.innerHTML += `<span class="inserted">${formattedText}</span>`;
-            oldContainer.innerHTML += `<span class="placeholder">${'&nbsp;'.repeat(Math.min(text.length, 10))}</span>`;
+            appendHTML(newContainer, `<span class="inserted">${formattedText}</span>`);
+            appendHTML(oldContainer, `<span class="placeholder">${'&nbsp;'.repeat(Math.min(text.length, 10))}</span>`);
           }
           break;
       }
@@ -133,8 +135,8 @@ const DiffHighlighter = {
 
     // Handle any remaining large insertion at the end
     if (isLargeInsertion) {
-      oldContainer.innerHTML += `<div class="large-change-indicator">Large insertion (${insertionBuffer.length} characters)</div>`;
-      newContainer.innerHTML += `<div class="large-change">${insertionBuffer}</div>`;
+      appendHTML(oldContainer, `<div class="large-change-indicator">Large insertion (${insertionBuffer.length} characters)</div>`);
+      appendHTML(newContainer, `<div class="large-change">${insertionBuffer}</div>`);
     }
 
     diffContainer.appendChild(oldContainer);
@@ -149,11 +151,11 @@ const DiffHighlighter = {
 
     const oldContainer = document.createElement('div');
     oldContainer.className = 'old-text';
-    oldContainer.innerHTML = this.formatText(oldText);
+    appendHTML(oldContainer, this.formatText(oldText));
 
     const newContainer = document.createElement('div');
     newContainer.className = 'new-text';
-    newContainer.innerHTML = this.formatText(newText);
+    appendHTML(newContainer, this.formatText(newText));
 
     diffContainer.appendChild(oldContainer);
     diffContainer.appendChild(newContainer);
