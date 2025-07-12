@@ -35,7 +35,7 @@ const DiffHighlighter = {
           const containerId = `diff-container-${Date.now()}-${index}`;
           container.id = containerId;
       
-          const originalContent = container.innerHTML;
+          const originalContent = container.cloneNode(true).innerHTML;
           await chrome.storage.local.set({[containerId]: originalContent});
       
           const oldText = container.children[0]?.textContent || '';
@@ -190,7 +190,7 @@ const DiffHighlighter = {
           const containerId = parentContainer.id;
           const result = await chrome.storage.local.get(containerId);
           if (result[containerId]) {
-            parentContainer.innerHTML = result[containerId];
+            appendHTML(parentContainer, result[containerId]);
             await chrome.storage.local.remove(containerId);
           } else {
             enhancedDiff.remove();
