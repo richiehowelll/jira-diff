@@ -16,7 +16,6 @@ chrome.runtime.onInstalled.addListener(async () => {
     for (const tab of tabs) {
       if (/^(chrome|chrome-extension):\/\//i.test(tab.url)) continue;
 
-      /* try the MV3 scripting API first … */
       try {
         await chrome.scripting.executeScript({
           files: cs.js,
@@ -24,18 +23,7 @@ chrome.runtime.onInstalled.addListener(async () => {
           injectImmediately: cs.run_at === 'document_start'
         });
       } catch (err) {
-        /* … fall back to tabs.executeScript for older Firefox builds */
-        if (chrome.tabs.executeScript) {
-          cs.js.forEach(file => {
-            chrome.tabs.executeScript(tab.id, {
-              file,
-              runAt: cs.run_at || 'document_idle',
-              allFrames: cs.all_frames || false
-            });
-          });
-        } else {
-          console.error('Failed to inject content script:', err);
-        }
+        console.error('Failed to inject content script via scripting API:', err);
       }
     }
   }
