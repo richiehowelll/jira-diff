@@ -38,6 +38,6 @@ npm run dev:firefox      # opens a temp Firefox with hot reload
 
 #### Production packages
 ```
-npm run build:chrome     # → jira-diff-highlighter.zip   (upload to Web Store)
-npm run build:firefox    # → web-ext-artifacts/*.zip     (upload to AMO)
+npm run build:chrome     # → jira-diff-highlighter.zip
+npm run build:firefox    # → web-ext-artifacts/*.zip
 ```
