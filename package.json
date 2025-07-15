@@ -1,0 +1,22 @@
+{
+  "name": "jira-diff-highlighter",
+  "version": "1.2",
+  "description": "Browser extension that shows Jira description diffs side-by-side with color-coded highlights.",
+  "author": "Your Name",
+  "private": true,
+
+  "scripts": {
+    "dev:chrome":   "node build.js chrome  && web-ext run -s dist/chrome  --target=chromium",
+    "dev:firefox":  "node build.js firefox && web-ext run -s dist/firefox",
+
+    "build:chrome":  "node build.js chrome  && cross-zip dist/chrome  jira-diff-highlighter.zip",
+    "build:firefox": "node build.js firefox && web-ext build     -s dist/firefox",
+
+    "build": "npm run build:chrome && npm run build:firefox"
+  },
+
+  "devDependencies": {
+    "cross-zip-cli": "^3.3.0",
+    "web-ext": "^7.6.0"
+  }
+}
