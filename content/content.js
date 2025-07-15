@@ -165,8 +165,8 @@ const DiffHighlighter = {
     return text
       .replace(/\*/g, '•')
       .split('\n')
-      .map(line => `<p>${line.trim()}</p>`)
-      .join('');
+      .map(line => line.trim())
+      .join('<br>');
   },
 
   setupObserver() {
