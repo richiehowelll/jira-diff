@@ -3,37 +3,44 @@
     margin-top: 10px;
     font-family: Arial, sans-serif;
     line-height: 1.5;
-  }
-  
-  .old-text, .new-text {
+}
+
+.old-text,
+.new-text {
     flex: 1;
+    min-width: 0;
     padding: 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
     white-space: pre-wrap;
     word-wrap: break-word;
+    overflow-wrap: anywhere;
     max-height: 500px;
     overflow-y: auto;
-  }
-  
-  .old-text {
+}
+
+.old-text {
     background-color: #fff5f5;
     margin-right: 5px;
     resize: horizontal;
-  }
-  
-  .new-text {
+    overflow: auto;  
+    flex: none;
+    width: 50%;   
+}
+
+.new-text {
     background-color: #f0fff4;
     margin-left: 5px;
-  }
-  
-  .deleted {
+    flex: 1;
+}
+
+.deleted {
     background-color: #ffd7d7;
     text-decoration: line-through;
     color: #b30000;
-  }
-  
-  .inserted {
+}
+
+.inserted {
     background-color: #a3ffb3;
     color: #006400;
     font-weight: bold;
@@ -41,26 +48,26 @@
     border-radius: 2px;
     padding: 0 2px;
     margin: 0 1px;
-  }
-  
-  .placeholder {
+}
+
+.placeholder {
     display: inline-block;
     border-bottom: 1px dashed #ccc;
-  }
-  
-  .large-change-indicator {
+}
+
+.large-change-indicator {
     background-color: #f0f0f0;
     color: #666;
     padding: 5px;
     margin: 5px 0;
     border-radius: 3px;
     font-style: italic;
-  }
-  
-  .large-change {
+}
+
+.large-change {
     background-color: #e6ffe6;
     border: 1px solid #00a000;
     padding: 5px;
     margin: 5px 0;
     border-radius: 3px;
-  }
+}
