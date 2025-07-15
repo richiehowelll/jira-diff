@@ -139,6 +139,14 @@ const DiffHighlighter = {
 
     diffContainer.appendChild(oldContainer);
     diffContainer.appendChild(newContainer);
+    
+    // Pane scroll sync
+    oldContainer.addEventListener('scroll', () => {
+      newContainer.scrollTop = oldContainer.scrollTop;
+    });
+    newContainer.addEventListener('scroll', () => {
+      oldContainer.scrollTop = newContainer.scrollTop;
+    });
 
     return diffContainer;
   },
