@@ -139,6 +139,14 @@ const DiffHighlighter = {
 
     diffContainer.appendChild(oldContainer);
     diffContainer.appendChild(newContainer);
+    
+    // Pane scroll sync
+    oldContainer.addEventListener('scroll', () => {
+      newContainer.scrollTop = oldContainer.scrollTop;
+    });
+    newContainer.addEventListener('scroll', () => {
+      oldContainer.scrollTop = newContainer.scrollTop;
+    });
 
     return diffContainer;
   },
@@ -165,8 +173,8 @@ const DiffHighlighter = {
     return text
       .replace(/\*/g, '•')
       .split('\n')
-      .map(line => `<p>${line.trim()}</p>`)
-      .join('');
+      .map(line => line.trim())
+      .join('<br>');
   },
 
   setupObserver() {
