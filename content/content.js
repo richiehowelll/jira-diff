@@ -22,6 +22,8 @@ const DiffHighlighter = {
 
   async enhanceDiff() {
     try {
+      if (this.isEnhancing) return;
+      this.isEnhancing = true;
       if (!isExtensionValid()) return;
       const data = await chrome.storage.sync.get('extensionEnabled');
       if (data.extensionEnabled !== false) {
@@ -52,7 +54,9 @@ const DiffHighlighter = {
       }
     } catch (error) {
       console.error('Error enhancing diff:', error);
-    }
+    } finally {
+      this.isEnhancing = false;
+  }
   },
 
   findDiffContainers() {
@@ -209,9 +213,10 @@ const DiffHighlighter = {
 
   setupObserver() {
     window.diffObserver = new MutationObserver(mutations => {
+      if (this.isEnhancing) return;
       if (mutations.some(mutation => mutation.addedNodes.length > 0)) {
-        this.debouncedEnhanceDiff();
-      }
+         this.debouncedEnhanceDiff();
+       }
     });
     window.diffObserver.observe(document.body, { childList: true, subtree: true });
   },
