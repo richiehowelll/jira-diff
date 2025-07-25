@@ -1,6 +1,6 @@
 {
   "name": "jira-diff-highlighter",
-  "version": "1.5",
+  "version": "1.6",
   "description": "Improves readability of Jira ticket diffs.",
   "author": "https://github.com/richiehowelll",
   "private": true,
