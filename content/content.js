@@ -56,13 +56,43 @@ const DiffHighlighter = {
   },
 
   findDiffContainers() {
-    const updateElements = Array.from(document.querySelectorAll('div'))
-      .filter(el => el.textContent.includes('updated the Description'));
+    const LANG_MAP = {
+      en: { update: ['updated'],        desc: 'description' },
+      es: { update: ['actualizado'],    desc: 'descripción' },
+      de: { update: ['aktualisiert'],   desc: 'beschreibung' },
+      fr: { update: ['mis à jour'],     desc: 'description' },
+      it: { update: ['aggiornato'],     desc: 'descrizione' },
+      pt: { update: ['atualizou'],      desc: 'descrição' },
+      ru: { update: ['обновил'],        desc: 'описание' },
+      ja: { update: ['更新'],           desc: '説明' },
+      zh: { update: ['更新'],           desc: '描述' }
+    };
 
-    return updateElements.map(el => {
-      const possibleDiffContainer = el.nextElementSibling;
-      return (possibleDiffContainer && possibleDiffContainer.children.length === 3) ? possibleDiffContainer : null;
-    }).filter(Boolean);
+    /* build flattened accent‑stripped keyword sets */
+    const norm = s => s.toLowerCase()
+                      .normalize('NFD')
+                      .replace(/[\u0300-\u036f]/g, '');
+
+    const DESC_SET   = new Set(Object.values(LANG_MAP).map(l => norm(l.desc)));
+    const UPDATE_SET = new Set(
+      Object.values(LANG_MAP).flatMap(l => l.update.map(norm))
+    );
+
+    const updateElements = Array.from(document.querySelectorAll('div'))
+      .filter(el => {
+        const txt = norm(el.textContent.trim());
+        return (
+          [...DESC_SET].some(word => txt.includes(word)) &&
+          [...UPDATE_SET].some(word => txt.includes(word))
+        );
+      });
+
+    return updateElements
+      .map(el => {
+        const diff = el.nextElementSibling;
+        return diff && diff.children.length === 3 ? diff : null;
+      })
+      .filter(Boolean);
   },
 
   createEnhancedDiff(oldText, newText) {
