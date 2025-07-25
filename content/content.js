@@ -24,39 +24,50 @@ const DiffHighlighter = {
     try {
       if (this.isEnhancing) return;
       this.isEnhancing = true;
+
       if (!isExtensionValid()) return;
-      const data = await chrome.storage.sync.get('extensionEnabled');
-      if (data.extensionEnabled !== false) {
-        const diffContainers = this.findDiffContainers();
-        
-        for (const [index, container] of diffContainers.entries()) {
-          if (container.querySelector('.enhanced-diff')) continue;
-      
-          const containerId = `diff-container-${Date.now()}-${index}`;
-          container.id = containerId;
-      
-          const originalContent = container.innerHTML;
-          await chrome.storage.local.set({[containerId]: originalContent});
-      
-          const oldText = container.children[0]?.textContent || '';
-          const newText = container.children[2]?.textContent || '';
-  
-          if (!oldText || !newText) {
-            console.error('Error: Expected child elements not found in diff container');
-            continue;
-          }
-          
-          const enhancedDiff = this.createEnhancedDiff(oldText, newText);
-          
-          container.innerHTML = '';
-          container.appendChild(enhancedDiff);
+
+      const { extensionEnabled } = await chrome.storage.sync.get('extensionEnabled');
+      if (extensionEnabled === false) return;
+
+      const diffContainers = this.findDiffContainers();
+
+      for (const [index, container] of diffContainers.entries()) {
+        if (container.querySelector('.enhanced-diff')) continue;
+
+        const containerId = `diff-container-${Date.now()}-${index}`;
+        container.id = containerId;
+
+        const originalContent = container.innerHTML;
+        await chrome.storage.local.set({[containerId]: originalContent});
+
+        const oldText = container.children[0]?.textContent || '';
+        const newText = container.children[2]?.textContent || '';
+
+        if (!oldText || !newText) {
+          console.error('Error: Expected child elements not found in diff container');
+          continue;
         }
+
+        const enhancedDiff = this.createEnhancedDiff(oldText, newText);
+
+        container.replaceChild(enhancedDiff, container.children[0]); 
+        if (container.children[1]) container.removeChild(container.children[1]);
+        if (container.children[1]) container.removeChild(container.children[1]);
+
+        // Watch this container; if Jira wipes our diff node, quietly re‑apply it
+        new MutationObserver((muts, obs) => {
+          if (!enhancedDiff.isConnected) {
+            obs.disconnect();
+            this.debouncedEnhanceDiff();
+          }
+        }).observe(container, { childList: true });
       }
     } catch (error) {
       console.error('Error enhancing diff:', error);
     } finally {
       this.isEnhancing = false;
-  }
+    }
   },
 
   findDiffContainers() {
@@ -212,13 +223,40 @@ const DiffHighlighter = {
   },
 
   setupObserver() {
-    window.diffObserver = new MutationObserver(mutations => {
-      if (this.isEnhancing) return;
-      if (mutations.some(mutation => mutation.addedNodes.length > 0)) {
-         this.debouncedEnhanceDiff();
-       }
+    if (window.diffObserver) return;
+
+    const triggerEnhance = () => {
+      if (!this.isEnhancing) this.debouncedEnhanceDiff();
+    };
+
+    window.diffObserver = new MutationObserver(muts => {
+      const relevant = muts.some(m =>
+        (m.addedNodes.length || m.removedNodes.length || m.type === 'characterData') &&
+        !m.target.closest('.enhanced-diff')
+      );
+      if (relevant) triggerEnhance();
     });
-    window.diffObserver.observe(document.body, { childList: true, subtree: true });
+
+    window.diffObserver.observe(document.body, {
+      childList: true,
+      characterData: true,
+      subtree: true
+    });
+
+    document.addEventListener(
+      'click',
+      e => {
+        const btn = e.target.closest(
+          '[data-testid^="issue-activity-feed.ui.buttons."]'
+        );
+        if (!btn) return;
+
+        console.log('[DH] activity button clicked:', btn.dataset.testid);
+
+        setTimeout(triggerEnhance, 200);
+      },
+      true
+    );
   },
 
   async removeEnhancements() {
