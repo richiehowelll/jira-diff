@@ -80,7 +80,8 @@ const DiffHighlighter = {
       pt: { update: ['atualizou'],      desc: 'descrição' },
       ru: { update: ['обновил'],        desc: 'описание' },
       ja: { update: ['更新'],           desc: '説明' },
-      zh: { update: ['更新'],           desc: '描述' }
+      zh: { update: ['更新'],           desc: '描述' },
+      nl: { update: ['bijgewerkt'],     desc: 'beschrijving' },
     };
 
     /* build flattened accent‑stripped keyword sets */
