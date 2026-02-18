@@ -1,14 +1,17 @@
 .enhanced-diff {
-    display: flex;
-    margin-top: 10px;
-    font-family: Arial, sans-serif;
-    line-height: 1.5;
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 10px;
+  font-family: Arial, sans-serif;
+  line-height: 1.5;
 }
 
 .old-text,
 .new-text {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
+    box-sizing: border-box;
     padding: 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -20,18 +23,21 @@
 }
 
 .old-text {
-    background-color: #fff5f5;
-    margin-right: 5px;
-    resize: horizontal;
-    overflow: auto;  
-    flex: none;
-    width: 50%;   
+  background-color: #fff5f5;
+  margin-right: 5px;
+  resize: horizontal;
+  overflow: auto;
+  flex: 0 0 auto;
+  width: 50%;
+  min-width: 200px;
+  max-width: 80%;
 }
 
 .new-text {
-    background-color: #f0fff4;
-    margin-left: 5px;
-    flex: 1;
+  background-color: #f0fff4;
+  margin-left: 5px;
+  flex: 1 1 auto;
+  overflow: auto;
 }
 
 .deleted {

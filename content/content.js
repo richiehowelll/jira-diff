@@ -143,45 +143,63 @@ const DiffHighlighter = {
     const newContainer = document.createElement('div');
     newContainer.className = 'new-text';
 
-    let isLargeInsertion = false;
-    let insertionBuffer = '';
+    let isBufferingLargeInsertion = false;
+    let largeInsertionTextBuffer = '';
 
-    diffs.forEach((diff) => {
-      const operation = diff[0];
-      const text = diff[1];
-      const formattedText = this.formatText(text);
+    const flushLargeInsertionBuffer = () => {
+      if (!isBufferingLargeInsertion) return;
 
-      switch(operation) {
+      const indicator = document.createElement('div');
+      indicator.className = 'large-change-indicator';
+      indicator.textContent = `Large insertion (${largeInsertionTextBuffer.length} characters)`;
+      oldContainer.appendChild(indicator);
+
+      const largeChange = document.createElement('div');
+      largeChange.className = 'large-change';
+      largeChange.appendChild(this.createTextFragment(largeInsertionTextBuffer));
+      newContainer.appendChild(largeChange);
+
+      isBufferingLargeInsertion = false;
+      largeInsertionTextBuffer = '';
+    };
+
+    diffs.forEach((diffTuple) => {
+      const operation = diffTuple[0];
+      const diffText = diffTuple[1];
+
+      const formattedPlainText = this.formatTextPlain(diffText);
+
+      switch (operation) {
         case 0: // DIFF_EQUAL
-          if (isLargeInsertion) {
-            oldContainer.innerHTML += `<div class="large-change-indicator">Large insertion (${insertionBuffer.length} characters)</div>`;
-            newContainer.innerHTML += `<div class="large-change">${insertionBuffer}</div>`;
-            isLargeInsertion = false;
-            insertionBuffer = '';
-          }
-          oldContainer.innerHTML += formattedText;
-          newContainer.innerHTML += formattedText;
+          flushLargeInsertionBuffer();
+          this.appendText(oldContainer, formattedPlainText);
+          this.appendText(newContainer, formattedPlainText);
           break;
+
         case -1: // DIFF_DELETE
-          oldContainer.innerHTML += `<span class="deleted">${formattedText}</span>`;
+          flushLargeInsertionBuffer();
+          this.appendText(oldContainer, formattedPlainText, 'deleted');
           break;
+
         case 1: // DIFF_INSERT
-          if (text.length > 50) {
-            isLargeInsertion = true;
-            insertionBuffer += formattedText;
+          if (diffText.length > 50) {
+            isBufferingLargeInsertion = true;
+            largeInsertionTextBuffer += formattedPlainText;
           } else {
-            newContainer.innerHTML += `<span class="inserted">${formattedText}</span>`;
-            oldContainer.innerHTML += `<span class="placeholder">${'&nbsp;'.repeat(Math.min(text.length, 10))}</span>`;
+            flushLargeInsertionBuffer();
+            this.appendText(newContainer, formattedPlainText, 'inserted');
+
+            const placeholderSpan = document.createElement('span');
+            placeholderSpan.className = 'placeholder';
+            placeholderSpan.textContent = '\u00A0'.repeat(Math.min(diffText.length, 10));
+            oldContainer.appendChild(placeholderSpan);
           }
           break;
       }
     });
 
     // Handle any remaining large insertion at the end
-    if (isLargeInsertion) {
-      oldContainer.innerHTML += `<div class="large-change-indicator">Large insertion (${insertionBuffer.length} characters)</div>`;
-      newContainer.innerHTML += `<div class="large-change">${insertionBuffer}</div>`;
-    }
+    flushLargeInsertionBuffer();
 
     diffContainer.appendChild(oldContainer);
     diffContainer.appendChild(newContainer);
@@ -203,11 +221,11 @@ const DiffHighlighter = {
 
     const oldContainer = document.createElement('div');
     oldContainer.className = 'old-text';
-    oldContainer.innerHTML = this.formatText(oldText);
+    oldContainer.appendChild(this.createTextFragment(oldText));
 
     const newContainer = document.createElement('div');
     newContainer.className = 'new-text';
-    newContainer.innerHTML = this.formatText(newText);
+    newContainer.appendChild(this.createTextFragment(newText));
 
     diffContainer.appendChild(oldContainer);
     diffContainer.appendChild(newContainer);
@@ -215,13 +233,44 @@ const DiffHighlighter = {
     return diffContainer;
   },
 
-  formatText(text) {
-    return text
-      .replace(/\*/g, '•')
-      .split('\n')
-      .map(line => line.trim())
-      .join('<br>');
-  },
+formatTextPlain(text) {
+  return String(text ?? '')
+    .replace(/\*/g, '•')
+    .split('\n')
+    .map((line) => line.trim())
+    .join('\n');
+},
+
+createTextFragment(text) {
+  // convert plain text into a DocumentFragment with <br> elements for newlines
+  const textFragment = document.createDocumentFragment();
+  const lines = this.formatTextPlain(text).split('\n');
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    textFragment.appendChild(document.createTextNode(lines[lineIndex]));
+    if (lineIndex < lines.length - 1) {
+      textFragment.appendChild(document.createElement('br'));
+    }
+  }
+
+  return textFragment;
+},
+
+appendText(parentElement, text, wrapperClassName = null) {
+  if (!parentElement) return;
+
+  const contentFragment = this.createTextFragment(text);
+
+  if (wrapperClassName) {
+    const wrapperSpan = document.createElement('span');
+    wrapperSpan.className = wrapperClassName;
+    wrapperSpan.appendChild(contentFragment);
+    parentElement.appendChild(wrapperSpan);
+    return;
+  }
+
+  parentElement.appendChild(contentFragment);
+},
 
   setupObserver() {
     if (window.diffObserver) return;
