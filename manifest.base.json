@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Jira Diff Highlighter",
-  "version": "1.7",
+  "version": "1.8",
   "description": "Improves readability of Jira ticket diffs.",
   "permissions": ["activeTab", "storage", "tabs", "scripting"],
   "host_permissions": ["*://*.atlassian.net/*"],
