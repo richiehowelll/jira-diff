@@ -7,6 +7,10 @@ if (typeof browser !== 'undefined' && typeof chrome === 'undefined') {
 const isExtensionValid = () => chrome.runtime && chrome.runtime.id;
 
 const DiffHighlighter = {
+  isForbiddenContainer(el) {
+    return !!el?.closest('[data-testid*="issue-create"]');
+  },
+
   async init() {
     try {
       if (!isExtensionValid()) return;
@@ -33,25 +37,32 @@ const DiffHighlighter = {
       const diffContainers = this.findDiffContainers();
 
       for (const [index, container] of diffContainers.entries()) {
+        if (!container || !(container instanceof HTMLElement)) continue;
         if (container.querySelector('.enhanced-diff')) continue;
+        if (this.isForbiddenContainer(container)) continue;
+
+        if (container.children.length !== 3) continue;
+
+        const oldNode = container.children[0];
+        const newNode = container.children[2];
+
+        const oldText = oldNode?.textContent || '';
+        const newText = newNode?.textContent || '';
+
+        if (!oldText || !newText) {
+          console.error('Error: Expected diff child elements not found in container');
+          continue;
+        }
 
         const containerId = `diff-container-${Date.now()}-${index}`;
         container.id = containerId;
 
         const originalContent = container.innerHTML;
-        await chrome.storage.local.set({[containerId]: originalContent});
-
-        const oldText = container.children[0]?.textContent || '';
-        const newText = container.children[2]?.textContent || '';
-
-        if (!oldText || !newText) {
-          console.error('Error: Expected child elements not found in diff container');
-          continue;
-        }
+        await chrome.storage.local.set({ [containerId]: originalContent });
 
         const enhancedDiff = this.createEnhancedDiff(oldText, newText);
 
-        container.replaceChild(enhancedDiff, container.children[0]); 
+        container.replaceChild(enhancedDiff, container.children[0]);
         if (container.children[1]) container.removeChild(container.children[1]);
         if (container.children[1]) container.removeChild(container.children[1]);
 
@@ -72,43 +83,83 @@ const DiffHighlighter = {
 
   findDiffContainers() {
     const LANG_MAP = {
-      en: { update: ['updated'],        desc: 'description' },
-      es: { update: ['actualizado'],    desc: 'descripción' },
-      de: { update: ['aktualisiert'],   desc: 'beschreibung' },
-      fr: { update: ['mis à jour'],     desc: 'description' },
-      it: { update: ['aggiornato'],     desc: 'descrizione' },
-      pt: { update: ['atualizou'],      desc: 'descrição' },
-      ru: { update: ['обновил'],        desc: 'описание' },
-      ja: { update: ['更新'],           desc: '説明' },
-      zh: { update: ['更新'],           desc: '描述' },
-      nl: { update: ['bijgewerkt'],     desc: 'beschrijving' },
+      en: { update: ['updated'],      desc: 'description' },
+      es: { update: ['actualizado'],  desc: 'descripción' },
+      de: { update: ['aktualisiert'], desc: 'beschreibung' },
+      fr: { update: ['mis à jour'],   desc: 'description' },
+      it: { update: ['aggiornato'],   desc: 'descrizione' },
+      pt: { update: ['atualizou'],    desc: 'descrição' },
+      ru: { update: ['обновил'],      desc: 'описание' },
+      ja: { update: ['更新'],         desc: '説明' },
+      zh: { update: ['更新'],         desc: '描述' },
+      nl: { update: ['bijgewerkt'],   desc: 'beschrijving' },
     };
 
-    /* build flattened accent‑stripped keyword sets */
-    const norm = s => s.toLowerCase()
-                      .normalize('NFD')
-                      .replace(/[\u0300-\u036f]/g, '');
+    const norm = s => String(s ?? '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
 
-    const DESC_SET   = new Set(Object.values(LANG_MAP).map(l => norm(l.desc)));
+    const DESC_SET = new Set(Object.values(LANG_MAP).map(l => norm(l.desc)));
     const UPDATE_SET = new Set(
       Object.values(LANG_MAP).flatMap(l => l.update.map(norm))
     );
 
-    const updateElements = Array.from(document.querySelectorAll('div'))
-      .filter(el => {
-        const txt = norm(el.textContent.trim());
-        return (
-          [...DESC_SET].some(word => txt.includes(word)) &&
-          [...UPDATE_SET].some(word => txt.includes(word))
-        );
-      });
+    const candidates = [];
+    const seen = new Set();
 
-    return updateElements
-      .map(el => {
-        const diff = el.nextElementSibling;
-        return diff && diff.children.length === 3 ? diff : null;
-      })
-      .filter(Boolean);
+    const allDivs = document.querySelectorAll('div');
+
+    for (const el of allDivs) {
+      if (!(el instanceof HTMLElement)) continue;
+      if (this.isForbiddenContainer(el)) continue;
+      if (el.closest('.enhanced-diff')) continue;
+
+      const txt = norm(el.textContent);
+      if (!txt) continue;
+
+      const hasDesc = [...DESC_SET].some(word => txt.includes(word));
+      const hasUpdate = [...UPDATE_SET].some(word => txt.includes(word));
+
+      if (!hasDesc || !hasUpdate) continue;
+
+      // Look for the diff container near the anchor, not anywhere on the page
+      const nearby = [
+        el.nextElementSibling,
+        el.parentElement?.nextElementSibling,
+        el.closest('div')?.nextElementSibling,
+      ];
+
+      for (const diff of nearby) {
+        if (!(diff instanceof HTMLElement)) continue;
+        if (this.isForbiddenContainer(diff)) continue;
+        if (diff.closest('.enhanced-diff')) continue;
+        if (diff.children.length !== 3) continue;
+
+        const oldNode = diff.children[0];
+        const newNode = diff.children[2];
+
+        if (!(oldNode instanceof HTMLElement) || !(newNode instanceof HTMLElement)) {
+          continue;
+        }
+
+        const oldText = oldNode.textContent?.trim() || '';
+        const newText = newNode.textContent?.trim() || '';
+
+        if (!oldText || !newText) continue;
+
+        // Avoid obvious interactive/layout UI
+        if (diff.querySelector('button, input, textarea, select')) continue;
+
+        if (!seen.has(diff)) {
+          seen.add(diff);
+          candidates.push(diff);
+        }
+      }
+    }
+
+    return candidates;
   },
 
   createEnhancedDiff(oldText, newText) {
