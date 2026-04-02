@@ -95,6 +95,7 @@ const DiffHighlighter = {
       nl: { update: ['bijgewerkt'],   desc: 'beschrijving' },
     };
 
+    /* build flattened accent‑stripped keyword sets */
     const norm = s => String(s ?? '')
       .toLowerCase()
       .normalize('NFD')
