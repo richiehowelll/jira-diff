@@ -38,6 +38,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const reloadCurrentTabIfMatches = domains => {
+    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+      const tab = tabs[0];
+      if (!tab || !tab.url || !isHttpUrl(tab.url)) return;
+
+      if (!isHostAllowed(tab.url, domains)) {
+        updateStatusMessage('Changes saved. Reload the Jira page to apply them if needed.', 'success');
+        return;
+      }
+
+      updateStatusMessage('Reloading current Jira page to apply changes...', 'success');
+      chrome.tabs.reload(tab.id);
+    });
+  };
+
   const applyToCurrentTab = domains => {
     chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
       const tab = tabs[0];
@@ -79,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     saveTimeout = setTimeout(() => {
       const domains = getCleanDomains(allowedDomainsInput.value);
       saveAllowedDomains(domains);
-      applyToCurrentTab(domains);
+      reloadCurrentTabIfMatches(domains);
     }, 400);
   });
 });
