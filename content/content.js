@@ -6,14 +6,75 @@ if (typeof browser !== 'undefined' && typeof chrome === 'undefined') {
 
 const isExtensionValid = () => chrome.runtime && chrome.runtime.id;
 
+const normalizeDomainPattern = domain => {
+  if (!domain || typeof domain !== 'string') return null;
+  const normalized = domain.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').toLowerCase();
+  return normalized || null;
+}
+const parseDomainPatterns = raw => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map(normalizeDomainPattern).filter(Boolean);
+  }
+  return String(raw)
+    .split(/[\n,]+/)
+    .map(normalizeDomainPattern)
+    .filter(Boolean);
+};
+
+const getAllowedDomainPatterns = async () => {
+  const { allowedDomains } = await chrome.storage.sync.get('allowedDomains');
+  const patterns = parseDomainPatterns(allowedDomains);
+  return patterns.length ? patterns : ['atlassian.net'];
+};
+
+const urlMatchesAllowedDomain = async url => {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    const patterns = await getAllowedDomainPatterns();
+    return patterns.some(pattern => host === pattern || host.endsWith(`.${pattern}`));
+  } catch {
+    return false;
+  }
+};
+
 const DiffHighlighter = {
   isForbiddenContainer(el) {
     return !!el?.closest('[data-testid*="issue-create"]');
   },
 
+  isLikelyJiraPage() {
+    try {
+      const path = new URL(window.location.href).pathname;
+      if (/(\/browse\/|\/jira\/|\/issues\/|\/secure\/(?:Issue|ViewIssue)\b)/i.test(path)) {
+        return true;
+      }
+    } catch {
+      // fall through
+    }
+
+    return Boolean(
+      document.querySelector('[data-testid*=\"issue-activity-feed.ui.buttons.\"]') ||
+      document.querySelector('[data-testid*=\"issue.views.issue-base.foundation.breadcrumbs.breadcrumbs-container\"]')
+    );
+  },
+
+  async isAllowedJiraPage() {
+    const matched = await urlMatchesAllowedDomain(window.location.href);
+    if (matched) return true;
+
+    const { allowedDomains } = await chrome.storage.sync.get('allowedDomains');
+    if (!Array.isArray(allowedDomains) || allowedDomains.length === 0) {
+      return this.isLikelyJiraPage();
+    }
+
+    return false;
+  },
+
   async init() {
     try {
       if (!isExtensionValid()) return;
+      if (!await this.isAllowedJiraPage()) return;
       const data = await chrome.storage.sync.get('extensionEnabled');
       if (data.extensionEnabled !== false) {
         this.enhanceDiff();
