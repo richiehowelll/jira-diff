@@ -36,8 +36,10 @@ chrome.tabs.onActivated.addListener(activeInfo => {
       return;
     }
 
-    if (tab.url && (tab.url.includes('atlassian.net/jira') || tab.url.includes('atlassian.net/browse'))) {
-      chrome.tabs.sendMessage(tab.id, { action: 'checkExtensionState' });
-    }
+    chrome.tabs.sendMessage(tab.id, { action: 'checkExtensionState' }, () => {
+      if (chrome.runtime.lastError) {
+        // Ignore pages without an injected content script.
+      }
+    });
   });
 });
