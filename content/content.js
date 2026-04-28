@@ -8,18 +8,21 @@ const isExtensionValid = () => chrome.runtime && chrome.runtime.id;
 
 const normalizeDomainPattern = domain => {
   if (!domain || typeof domain !== 'string') return null;
-  const normalized = domain.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').toLowerCase();
+  const normalized = domain.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/^\*\./, '').toLowerCase();
   return normalized || null;
 }
+
+const isValidDomainPattern = domain => /^[a-z0-9.-]+$/.test(domain) && !domain.includes('..');
+
 const parseDomainPatterns = raw => {
   if (!raw) return [];
   if (Array.isArray(raw)) {
-    return raw.map(normalizeDomainPattern).filter(Boolean);
+    return raw.map(normalizeDomainPattern).filter(isValidDomainPattern);
   }
   return String(raw)
     .split(/[\n,]+/)
     .map(normalizeDomainPattern)
-    .filter(Boolean);
+    .filter(isValidDomainPattern);
 };
 
 const getAllowedDomainPatterns = async () => {

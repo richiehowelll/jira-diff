@@ -7,24 +7,69 @@ if (typeof browser !== 'undefined' && typeof chrome === 'undefined') {
 document.addEventListener('DOMContentLoaded', () => {
   const toggleSwitch = document.getElementById('extensionToggle');
   const allowedDomainsInput = document.getElementById('allowedDomains');
+  const saveDomainsButton = document.getElementById('saveDomains');
+  const statusMessage = document.getElementById('statusMessage');
+  let storedDomains = [];
 
-  const normalizeDomainValue = value => String(value || '')
+  const normalizeDomainValue = value => [...new Set(String(value || '')
     .split(/[\n,]+/)
-    .map(domain => domain.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').toLowerCase())
-    .filter(Boolean);
+    .map(domain => domain.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/^\*\./, '').toLowerCase())
+    .filter(domain => /^[a-z0-9.-]+$/.test(domain) && !domain.includes('..')))];
 
-  const saveAllowedDomains = domains => {
-    chrome.storage.sync.set({ allowedDomains: domains });
+  const isAtlassianDomain = domain => domain === 'atlassian.net' || domain.endsWith('.atlassian.net');
+
+  const domainToOrigins = domain => {
+    const origins = [`https://${domain}/*`];
+    if (domain.includes('.')) origins.push(`https://*.${domain}/*`);
+    return origins;
   };
 
-  const statusMessage = document.getElementById('statusMessage');
+  const setSaveState = saving => {
+    saveDomainsButton.disabled = saving;
+    saveDomainsButton.textContent = saving ? 'Saving...' : 'Save domains';
+  };
 
   const updateStatusMessage = (text, type) => {
     statusMessage.textContent = text || '';
     statusMessage.style.color = type === 'error' ? '#D32F2F' : type === 'success' ? '#2E7D32' : '#333';
   };
 
-  const getCleanDomains = value => normalizeDomainValue(value);
+  const requestOrigins = origins => new Promise(resolve => {
+    if (!origins.length) {
+      resolve(true);
+      return;
+    }
+
+    chrome.permissions.request({ origins }, granted => {
+      resolve(Boolean(granted));
+    });
+  });
+
+  const removeOrigins = origins => new Promise(resolve => {
+    if (!origins.length) {
+      resolve(true);
+      return;
+    }
+
+    chrome.permissions.remove({ origins }, removed => {
+      resolve(Boolean(removed));
+    });
+  });
+
+  const syncCustomDomainContentScript = () => new Promise(resolve => {
+    chrome.runtime.sendMessage({ action: 'syncCustomDomainContentScript' }, response => {
+      if (chrome.runtime.lastError || response?.status === 'error') {
+        resolve(false);
+        return;
+      }
+
+      resolve(true);
+    });
+  });
+
+  const saveAllowedDomains = domains => new Promise(resolve => {
+    chrome.storage.sync.set({ allowedDomains: domains }, resolve);
+  });
 
   const isHttpUrl = url => /^https?:\/\//i.test(url);
 
@@ -38,43 +83,80 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  const reloadCurrentTabIfMatches = domains => {
-    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-      const tab = tabs[0];
-      if (!tab || !tab.url || !isHttpUrl(tab.url)) return;
-
-      if (!isHostAllowed(tab.url, domains)) {
-        updateStatusMessage('Changes saved. Reload the Jira page to apply them if needed.', 'success');
-        return;
-      }
-
-      updateStatusMessage('Reloading current Jira page to apply changes...', 'success');
-      chrome.tabs.reload(tab.id);
+  const injectIntoTab = tabId => new Promise(resolve => {
+    chrome.scripting.insertCSS({
+      target: { tabId },
+      files: ['content/styles.css']
+    }, () => {
+      chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['lib/diff_match_patch.js', 'content/content.js']
+      }, () => {
+        resolve(!chrome.runtime.lastError);
+      });
     });
-  };
+  });
 
   const applyToCurrentTab = domains => {
     chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
       const tab = tabs[0];
-      if (!tab || !tab.url || !isHttpUrl(tab.url)) return;
+      if (!tab || !tab.url || !isHttpUrl(tab.url) || !isHostAllowed(tab.url, domains)) return;
 
-      const shouldReload = isHostAllowed(tab.url, domains);
-      chrome.tabs.sendMessage(tab.id, { action: 'checkExtensionState' }, () => {
-        if (chrome.runtime.lastError) {
-          if (shouldReload) {
-            updateStatusMessage('Reloading page to apply Jira domain changes...', 'success');
-            chrome.tabs.reload(tab.id);
-          }
-        } else if (shouldReload) {
-          updateStatusMessage('Applied changes to current page.', 'success');
+      chrome.tabs.sendMessage(tab.id, { action: 'checkExtensionState' }, async () => {
+        if (!chrome.runtime.lastError) {
+          updateStatusMessage('Saved and applied to the current Jira page.', 'success');
+          return;
+        }
+
+        const injected = await injectIntoTab(tab.id);
+        if (injected) {
+          updateStatusMessage('Saved and applied to the current Jira page.', 'success');
+        } else {
+          updateStatusMessage('Saved. Reload this Jira page to apply changes.', 'success');
         }
       });
     });
   };
 
+  const saveDomains = async () => {
+    const domains = normalizeDomainValue(allowedDomainsInput.value);
+    const customOrigins = domains
+      .filter(domain => !isAtlassianDomain(domain))
+      .flatMap(domainToOrigins);
+
+    setSaveState(true);
+
+    try {
+      const granted = await requestOrigins(customOrigins);
+      if (!granted) {
+        updateStatusMessage('Custom Jira domain access was not granted.', 'error');
+        return;
+      }
+
+      const nextOriginSet = new Set(customOrigins);
+      const removedOrigins = storedDomains
+        .filter(domain => !isAtlassianDomain(domain))
+        .flatMap(domainToOrigins)
+        .filter(origin => !nextOriginSet.has(origin));
+
+      await removeOrigins(removedOrigins);
+      await saveAllowedDomains(domains);
+      storedDomains = domains;
+      await syncCustomDomainContentScript();
+      allowedDomainsInput.value = domains.join('\n');
+      updateStatusMessage('Jira domains saved.', 'success');
+      applyToCurrentTab(domains);
+    } finally {
+      setSaveState(false);
+    }
+  };
+
   chrome.storage.sync.get(['extensionEnabled', 'allowedDomains'], data => {
     toggleSwitch.checked = data.extensionEnabled !== false;
-    allowedDomainsInput.value = (Array.isArray(data.allowedDomains) ? data.allowedDomains : []).join('\n');
+    storedDomains = Array.isArray(data.allowedDomains)
+      ? data.allowedDomains
+      : normalizeDomainValue(data.allowedDomains);
+    allowedDomainsInput.value = storedDomains.join('\n');
   });
 
   toggleSwitch.addEventListener('change', function () {
@@ -88,13 +170,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  let saveTimeout;
   allowedDomainsInput.addEventListener('input', () => {
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-      const domains = getCleanDomains(allowedDomainsInput.value);
-      saveAllowedDomains(domains);
-      reloadCurrentTabIfMatches(domains);
-    }, 400);
+    updateStatusMessage('Unsaved domain changes.', 'info');
   });
+
+  saveDomainsButton.addEventListener('click', saveDomains);
 });
