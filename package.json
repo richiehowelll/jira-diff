@@ -10,7 +10,7 @@
     "dev:firefox":  "node build.js firefox && web-ext run -s dist/firefox",
 
     "build:chrome":  "node build.js chrome  && cross-zip dist/chrome  jira-diff-highlighter.zip",
-    "build:firefox": "node build.js firefox && web-ext build     -s dist/firefox",
+    "build:firefox": "node build.js firefox && web-ext build     -s dist/firefox --overwrite-dest",
 
     "build": "npm run build:chrome && npm run build:firefox"
   },

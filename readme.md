@@ -23,7 +23,7 @@ Jira Diff Highlighter is a cross-browser extension (Chrome & Firefox) that enhan
 
 - The extension automatically enhances diff views on Jira pages.
 - Use the extension's toggle button to switch between enhanced and original views.
-- The extension works on Atlassian Jira pages, including custom-hosted Jira instances on custom domains.
+- The extension works on Atlassian-hosted Jira pages by default. Custom Jira domains can be enabled from the extension popup with per-site access.
 
 ---
 

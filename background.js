@@ -4,11 +4,69 @@ if (typeof browser !== 'undefined' && typeof chrome === 'undefined') {
 }
 /* --------------------------------------- */
 
+const CUSTOM_CONTENT_SCRIPT_ID = 'jira-diff-custom-domains';
+
+const normalizeDomainPattern = domain => {
+  if (!domain || typeof domain !== 'string') return null;
+  const normalized = domain.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/^\*\./, '').toLowerCase();
+  return normalized || null;
+};
+
+const isValidDomainPattern = domain => /^[a-z0-9.-]+$/.test(domain) && !domain.includes('..');
+
+const parseDomainPatterns = raw => {
+  const values = Array.isArray(raw) ? raw : String(raw || '').split(/[\n,]+/);
+  return [...new Set(values.map(normalizeDomainPattern).filter(isValidDomainPattern))];
+};
+
+const isAtlassianDomain = domain => domain === 'atlassian.net' || domain.endsWith('.atlassian.net');
+
+const domainToMatchPatterns = domain => {
+  const patterns = [`https://${domain}/*`];
+  if (domain.includes('.')) patterns.push(`https://*.${domain}/*`);
+  return patterns;
+};
+
+const hasOriginPermission = origins => new Promise(resolve => {
+  chrome.permissions.contains({ origins }, granted => resolve(Boolean(granted)));
+});
+
+async function syncCustomDomainContentScript() {
+  if (!chrome.scripting?.registerContentScripts) return;
+
+  try {
+    await chrome.scripting.unregisterContentScripts({ ids: [CUSTOM_CONTENT_SCRIPT_ID] });
+  } catch {
+    // The script may not have been registered yet.
+  }
+
+  const { allowedDomains } = await chrome.storage.sync.get('allowedDomains');
+  const matches = [];
+
+  for (const domain of parseDomainPatterns(allowedDomains).filter(domain => !isAtlassianDomain(domain))) {
+    const origins = domainToMatchPatterns(domain);
+    if (await hasOriginPermission(origins)) {
+      matches.push(...origins);
+    }
+  }
+
+  if (!matches.length) return;
+
+  await chrome.scripting.registerContentScripts([{
+    id: CUSTOM_CONTENT_SCRIPT_ID,
+    matches,
+    js: ['lib/diff_match_patch.js', 'content/content.js'],
+    css: ['content/styles.css']
+  }]);
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   if (!chrome.runtime?.id) {
     console.error('Extension context invalidated during installation.');
     return;
   }
+
+  await syncCustomDomainContentScript();
 
   for (const cs of chrome.runtime.getManifest().content_scripts) {
     const tabs = await chrome.tabs.query({ url: cs.matches });
@@ -27,6 +85,33 @@ chrome.runtime.onInstalled.addListener(async () => {
       }
     }
   }
+});
+
+chrome.runtime.onStartup?.addListener(() => {
+  syncCustomDomainContentScript().catch(err => {
+    console.error('Failed to register custom Jira domain content scripts:', err);
+  });
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'sync' || !changes.allowedDomains) return;
+
+  syncCustomDomainContentScript().catch(err => {
+    console.error('Failed to register custom Jira domain content scripts:', err);
+  });
+});
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request?.action !== 'syncCustomDomainContentScript') return false;
+
+  syncCustomDomainContentScript()
+    .then(() => sendResponse({ status: 'success' }))
+    .catch(error => {
+      console.error('Failed to sync custom Jira domain content scripts:', error);
+      sendResponse({ status: 'error', message: error.message });
+    });
+
+  return true;
 });
 
 chrome.tabs.onActivated.addListener(activeInfo => {

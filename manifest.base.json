@@ -4,10 +4,11 @@
   "version": "1.11",
   "description": "Improves readability of Jira ticket diffs.",
   "permissions": ["activeTab", "storage", "tabs", "scripting"],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": ["https://*.atlassian.net/*"],
+  "optional_host_permissions": ["https://*/*"],
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["https://*.atlassian.net/*"],
       "js": ["lib/diff_match_patch.js", "content/content.js"],
       "css": ["content/styles.css"]
     }
