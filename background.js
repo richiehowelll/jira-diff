@@ -22,13 +22,21 @@ const parseDomainPatterns = raw => {
 const isAtlassianDomain = domain => domain === 'atlassian.net' || domain.endsWith('.atlassian.net');
 
 const domainToMatchPatterns = domain => {
+  // Keep exact and wildcard origins separate so we only register patterns the user granted.
   const patterns = [`https://${domain}/*`];
   if (domain.includes('.')) patterns.push(`https://*.${domain}/*`);
   return patterns;
 };
 
-const hasOriginPermission = origins => new Promise(resolve => {
-  chrome.permissions.contains({ origins }, granted => resolve(Boolean(granted)));
+const hasOriginPermission = origin => new Promise(resolve => {
+  chrome.permissions.contains({ origins: [origin] }, granted => resolve(Boolean(granted)));
+});
+
+const getGrantedPermissionDomains = () => new Promise(resolve => {
+  chrome.permissions.getAll(permissions => {
+    const origins = Array.isArray(permissions?.origins) ? permissions.origins : [];
+    resolve(parseDomainPatterns(origins).filter(domain => !isAtlassianDomain(domain)));
+  });
 });
 
 async function syncCustomDomainContentScript() {
@@ -41,12 +49,19 @@ async function syncCustomDomainContentScript() {
   }
 
   const { allowedDomains } = await chrome.storage.sync.get('allowedDomains');
+  // Permissions are the browser's source of truth; storage can lag after upgrades or manual changes.
+  const customDomains = [
+    ...parseDomainPatterns(allowedDomains).filter(domain => !isAtlassianDomain(domain)),
+    ...await getGrantedPermissionDomains()
+  ];
   const matches = [];
 
-  for (const domain of parseDomainPatterns(allowedDomains).filter(domain => !isAtlassianDomain(domain))) {
+  for (const domain of [...new Set(customDomains)]) {
     const origins = domainToMatchPatterns(domain);
-    if (await hasOriginPermission(origins)) {
-      matches.push(...origins);
+    for (const origin of origins) {
+      if (await hasOriginPermission(origin)) {
+        matches.push(origin);
+      }
     }
   }
 

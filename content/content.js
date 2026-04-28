@@ -8,6 +8,7 @@ const isExtensionValid = () => chrome.runtime && chrome.runtime.id;
 
 const normalizeDomainPattern = domain => {
   if (!domain || typeof domain !== 'string') return null;
+  // Accept pasted URLs or wildcard origins, but store only the comparable hostname.
   const normalized = domain.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/^\*\./, '').toLowerCase();
   return normalized || null;
 }
