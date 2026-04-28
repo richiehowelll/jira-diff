@@ -4,8 +4,8 @@
   <title>Jira Diff Highlighter</title>
   <style>
     body {
-      width: 300px;
-      padding: 10px;
+      width: 320px;
+      padding: 12px;
       font-family: Arial, sans-serif;
       background-color: #f0f0f0;
     }
@@ -97,22 +97,50 @@
       font-size: 13px;
       font-weight: bold;
     }
-    .domain-settings textarea {
-      width: 100%;
-      min-height: 70px;
+    .domain-entry {
+      display: flex;
+      gap: 6px;
+    }
+    .domain-entry input {
+      flex: 1;
+      min-width: 0;
       padding: 8px;
       border: 1px solid #ccc;
       border-radius: 6px;
       font-family: inherit;
-      resize: vertical;
     }
     .domain-settings .hint {
       margin-top: 6px;
       font-size: 12px;
       color: #555;
     }
-    .save-domains {
-      margin-top: 8px;
+    .domain-list {
+      margin: 10px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .domain-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 8px;
+      margin-top: 6px;
+      border: 1px solid #d5dbe5;
+      border-radius: 6px;
+      background: #fff;
+      color: #172B4D;
+      font-size: 13px;
+    }
+    .domain-item span {
+      overflow-wrap: anywhere;
+    }
+    .empty-domains {
+      margin-top: 10px;
+      color: #555;
+      font-size: 12px;
+    }
+    .domain-button {
       padding: 7px 10px;
       border: 0;
       border-radius: 6px;
@@ -121,9 +149,21 @@
       cursor: pointer;
       font-weight: bold;
     }
-    .save-domains:disabled {
+    .domain-button:disabled {
       background: #8a9bb8;
       cursor: default;
+    }
+    .remove-domain {
+      border: 0;
+      background: transparent;
+      color: #42526E;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .remove-domain:hover {
+      color: #BF2600;
     }
     .status-message {
       margin-bottom: 12px;
@@ -144,9 +184,13 @@
   </div>
   <div class="domain-settings">
     <label for="allowedDomains">Allowed Jira domains</label>
-    <textarea id="allowedDomains" placeholder="example.atlassian.net, jira.example.com"></textarea>
-    <button id="saveDomains" class="save-domains" type="button">Save domains</button>
-    <div class="hint">Atlassian-hosted Jira works by default. Custom domains ask for site access when saved.</div>
+    <div class="domain-entry">
+      <input id="allowedDomains" type="text" placeholder="jira.example.com">
+      <button id="addDomain" class="domain-button" type="button">Add</button>
+    </div>
+    <ul id="domainList" class="domain-list"></ul>
+    <div id="emptyDomains" class="empty-domains">No custom domains added.</div>
+    <div class="hint">Atlassian-hosted Jira works by default. Custom domains ask for site access when added.</div>
   </div>
   <div id="statusMessage" class="status-message"></div>
   <a href="https://www.buymeacoffee.com/richiehowelll" target="_blank" class="coffee-link">
