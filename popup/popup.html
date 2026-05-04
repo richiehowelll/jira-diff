@@ -87,15 +87,33 @@
       margin-right: 8px;
       vertical-align: middle;
     }
+    .diff-settings,
     .domain-settings {
       margin-bottom: 15px;
     }
+    .diff-settings label,
     .domain-settings label {
       display: block;
       margin-bottom: 6px;
       color: #333;
       font-size: 13px;
       font-weight: bold;
+    }
+    .diff-limit-entry {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .diff-limit-entry input {
+      width: 90px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-family: inherit;
+    }
+    .diff-limit-entry span {
+      color: #333;
+      font-size: 13px;
     }
     .domain-entry {
       display: flex;
@@ -109,6 +127,7 @@
       border-radius: 6px;
       font-family: inherit;
     }
+    .diff-settings .hint,
     .domain-settings .hint {
       margin-top: 6px;
       font-size: 12px;
@@ -181,6 +200,14 @@
       <span class="slider"></span>
     </label>
     <span class="toggle-label">Enable diff highlighting</span>
+  </div>
+  <div class="diff-settings">
+    <label for="largeChangeLimit">Large change limit</label>
+    <div class="diff-limit-entry">
+      <input id="largeChangeLimit" type="number" min="1" max="10000" step="1">
+      <span>characters</span>
+    </div>
+    <div class="hint">Insertions or deletions longer than this are collapsed into large-change blocks.</div>
   </div>
   <div class="domain-settings">
     <label for="allowedDomains">Allowed Jira domains</label>

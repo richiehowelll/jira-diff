@@ -5,6 +5,20 @@ if (typeof browser !== 'undefined' && typeof chrome === 'undefined') {
 /* --------------------------------------- */
 
 const isExtensionValid = () => chrome.runtime && chrome.runtime.id;
+const DEFAULT_LARGE_CHANGE_LIMIT = 500;
+const MIN_LARGE_CHANGE_LIMIT = 1;
+const MAX_LARGE_CHANGE_LIMIT = 10000;
+
+const normalizeLargeChangeLimit = value => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_LARGE_CHANGE_LIMIT;
+  return Math.min(Math.max(parsed, MIN_LARGE_CHANGE_LIMIT), MAX_LARGE_CHANGE_LIMIT);
+};
+
+const getLargeChangeLimit = async () => {
+  const { largeChangeLimit } = await chrome.storage.sync.get('largeChangeLimit');
+  return normalizeLargeChangeLimit(largeChangeLimit);
+};
 
 const normalizeDomainPattern = domain => {
   if (!domain || typeof domain !== 'string') return null;
@@ -100,6 +114,7 @@ const DiffHighlighter = {
       if (extensionEnabled === false) return;
 
       const diffContainers = this.findDiffContainers();
+      const largeChangeLimit = await getLargeChangeLimit();
 
       for (const [index, container] of diffContainers.entries()) {
         if (!container || !(container instanceof HTMLElement)) continue;
@@ -125,7 +140,7 @@ const DiffHighlighter = {
         const originalContent = container.innerHTML;
         await chrome.storage.local.set({ [containerId]: originalContent });
 
-        const enhancedDiff = this.createEnhancedDiff(oldText, newText);
+        const enhancedDiff = this.createEnhancedDiff(oldText, newText, largeChangeLimit);
 
         container.replaceChild(enhancedDiff, container.children[0]);
         if (container.children[1]) container.removeChild(container.children[1]);
@@ -228,7 +243,7 @@ const DiffHighlighter = {
     return candidates;
   },
 
-  createEnhancedDiff(oldText, newText) {
+  createEnhancedDiff(oldText, newText, largeChangeLimit = DEFAULT_LARGE_CHANGE_LIMIT) {
     const diffContainer = document.createElement('div');
     diffContainer.className = 'enhanced-diff';
 
@@ -262,22 +277,73 @@ const DiffHighlighter = {
 
     let isBufferingLargeInsertion = false;
     let largeInsertionTextBuffer = '';
+    let isBufferingLargeDeletion = false;
+    let largeDeletionTextBuffer = '';
+
+    const createLargeChangeToggle = (type, text) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = `large-change-wrapper large-${type}-wrapper`;
+
+      const indicator = document.createElement('div');
+      indicator.className = `large-change-indicator large-${type}-indicator`;
+
+      const label = document.createElement('span');
+      label.textContent = `Large ${type} (${text.length} characters)`;
+
+      const toggleButton = document.createElement('button');
+      toggleButton.type = 'button';
+      toggleButton.className = 'large-change-toggle';
+      toggleButton.textContent = 'Show full text';
+      toggleButton.setAttribute('aria-expanded', 'false');
+
+      let fullTextElement = null;
+
+      toggleButton.addEventListener('click', () => {
+        const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+
+        if (isExpanded) {
+          fullTextElement?.remove();
+          fullTextElement = null;
+          toggleButton.textContent = 'Show full text';
+          toggleButton.setAttribute('aria-expanded', 'false');
+          return;
+        }
+
+        fullTextElement = document.createElement('div');
+        fullTextElement.className = `large-change-full-text large-${type}-full-text`;
+        fullTextElement.appendChild(this.createTextFragment(text));
+        wrapper.appendChild(fullTextElement);
+        toggleButton.textContent = 'Hide full text';
+        toggleButton.setAttribute('aria-expanded', 'true');
+      });
+
+      indicator.append(label, toggleButton);
+      wrapper.appendChild(indicator);
+
+      return wrapper;
+    };
 
     const flushLargeInsertionBuffer = () => {
       if (!isBufferingLargeInsertion) return;
 
-      const indicator = document.createElement('div');
-      indicator.className = 'large-change-indicator';
-      indicator.textContent = `Large insertion (${largeInsertionTextBuffer.length} characters)`;
-      oldContainer.appendChild(indicator);
-
-      const largeChange = document.createElement('div');
-      largeChange.className = 'large-change';
-      largeChange.appendChild(this.createTextFragment(largeInsertionTextBuffer));
-      newContainer.appendChild(largeChange);
+      newContainer.appendChild(createLargeChangeToggle('insertion', largeInsertionTextBuffer));
 
       isBufferingLargeInsertion = false;
       largeInsertionTextBuffer = '';
+    };
+
+    const flushLargeDeletionBuffer = () => {
+      if (!isBufferingLargeDeletion) return;
+
+      oldContainer.appendChild(createLargeChangeToggle('deletion', largeDeletionTextBuffer));
+
+      isBufferingLargeDeletion = false;
+      largeDeletionTextBuffer = '';
+    };
+
+    const flushLargeChangeBuffers = () => {
+      flushLargeInsertionBuffer();
+      flushLargeDeletionBuffer();
     };
 
     diffs.forEach((diffTuple) => {
@@ -288,18 +354,25 @@ const DiffHighlighter = {
 
       switch (operation) {
         case 0: // DIFF_EQUAL
-          flushLargeInsertionBuffer();
+          flushLargeChangeBuffers();
           this.appendText(oldContainer, formattedPlainText);
           this.appendText(newContainer, formattedPlainText);
           break;
 
         case -1: // DIFF_DELETE
           flushLargeInsertionBuffer();
-          this.appendText(oldContainer, formattedPlainText, 'deleted');
+          if (diffText.length > largeChangeLimit) {
+            isBufferingLargeDeletion = true;
+            largeDeletionTextBuffer += formattedPlainText;
+          } else {
+            flushLargeDeletionBuffer();
+            this.appendText(oldContainer, formattedPlainText, 'deleted');
+          }
           break;
 
         case 1: // DIFF_INSERT
-          if (diffText.length > 50) {
+          flushLargeDeletionBuffer();
+          if (diffText.length > largeChangeLimit) {
             isBufferingLargeInsertion = true;
             largeInsertionTextBuffer += formattedPlainText;
           } else {
@@ -315,8 +388,8 @@ const DiffHighlighter = {
       }
     });
 
-    // Handle any remaining large insertion at the end
-    flushLargeInsertionBuffer();
+    // Handle any remaining large changes at the end
+    flushLargeChangeBuffers();
 
     diffContainer.appendChild(oldContainer);
     diffContainer.appendChild(newContainer);
@@ -471,7 +544,8 @@ const MessageHandler = {
         sendResponse({status: "success"});
       } else if (request.action === "checkExtensionState") {
         const data = await chrome.storage.sync.get('extensionEnabled');
-        if (data.extensionEnabled) {
+        if (data.extensionEnabled !== false) {
+          await DiffHighlighter.removeEnhancements();
           await DiffHighlighter.enhanceDiff();
           DiffHighlighter.setupObserver();
         } else {
