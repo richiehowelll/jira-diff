@@ -5,7 +5,7 @@ Jira Diff Highlighter is a cross-browser extension (Chrome & Firefox) that enhan
 ## Features
 - **Enhanced Diff View**: Converts standard Jira diffs into a side-by-side comparison for easier reading.
 - **Highlighted Changes**: Color-codes additions, deletions, and modifications for quick identification.
-- **Large Change Handling**: Efficiently displays large insertions or deletions without cluttering the view.
+- **Configurable Large Change Handling**: Collapses large insertions and deletions above your chosen character limit without cluttering the view.
 - **Toggle Functionality**: Easily switch between enhanced and original diff views.
 - **Multi-Tab Support**: Maintains consistent state across multiple Jira tabs.
   
@@ -23,6 +23,7 @@ Jira Diff Highlighter is a cross-browser extension (Chrome & Firefox) that enhan
 
 - The extension automatically enhances diff views on Jira pages.
 - Use the extension's toggle button to switch between enhanced and original views.
+- Set the large change limit from the extension popup. The default is 500 characters.
 - The extension works on Atlassian-hosted Jira pages by default. Custom Jira domains can be enabled from the extension popup with per-site access.
 
 ---

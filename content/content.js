@@ -5,6 +5,23 @@ if (typeof browser !== 'undefined' && typeof chrome === 'undefined') {
 /* --------------------------------------- */
 
 const isExtensionValid = () => chrome.runtime && chrome.runtime.id;
+const DEFAULT_LARGE_CHANGE_LIMIT = 500;
+const MIN_LARGE_CHANGE_LIMIT = 1;
+const MAX_LARGE_CHANGE_LIMIT = 10000;
+
+const normalizeLargeChangeLimit = value => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_LARGE_CHANGE_LIMIT;
+  return Math.min(Math.max(parsed, MIN_LARGE_CHANGE_LIMIT), MAX_LARGE_CHANGE_LIMIT);
+};
+
+const getLargeChangeLimit = async () => {
+  const { largeChangeLimit, largeInsertionLimit } = await chrome.storage.sync.get([
+    'largeChangeLimit',
+    'largeInsertionLimit'
+  ]);
+  return normalizeLargeChangeLimit(largeChangeLimit ?? largeInsertionLimit);
+};
 
 const normalizeDomainPattern = domain => {
   if (!domain || typeof domain !== 'string') return null;
@@ -100,6 +117,7 @@ const DiffHighlighter = {
       if (extensionEnabled === false) return;
 
       const diffContainers = this.findDiffContainers();
+      const largeChangeLimit = await getLargeChangeLimit();
 
       for (const [index, container] of diffContainers.entries()) {
         if (!container || !(container instanceof HTMLElement)) continue;
@@ -125,7 +143,7 @@ const DiffHighlighter = {
         const originalContent = container.innerHTML;
         await chrome.storage.local.set({ [containerId]: originalContent });
 
-        const enhancedDiff = this.createEnhancedDiff(oldText, newText);
+        const enhancedDiff = this.createEnhancedDiff(oldText, newText, largeChangeLimit);
 
         container.replaceChild(enhancedDiff, container.children[0]);
         if (container.children[1]) container.removeChild(container.children[1]);
@@ -228,7 +246,7 @@ const DiffHighlighter = {
     return candidates;
   },
 
-  createEnhancedDiff(oldText, newText) {
+  createEnhancedDiff(oldText, newText, largeChangeLimit = DEFAULT_LARGE_CHANGE_LIMIT) {
     const diffContainer = document.createElement('div');
     diffContainer.className = 'enhanced-diff';
 
@@ -262,22 +280,41 @@ const DiffHighlighter = {
 
     let isBufferingLargeInsertion = false;
     let largeInsertionTextBuffer = '';
+    let isBufferingLargeDeletion = false;
+    let largeDeletionTextBuffer = '';
+
+    const createLargeChangeIndicator = (type, characterCount) => {
+      const indicator = document.createElement('div');
+      indicator.className = `large-change-indicator large-${type}-indicator`;
+      indicator.textContent = `Large ${type} (${characterCount} characters)`;
+      return indicator;
+    };
 
     const flushLargeInsertionBuffer = () => {
       if (!isBufferingLargeInsertion) return;
 
-      const indicator = document.createElement('div');
-      indicator.className = 'large-change-indicator';
-      indicator.textContent = `Large insertion (${largeInsertionTextBuffer.length} characters)`;
-      oldContainer.appendChild(indicator);
-
-      const largeChange = document.createElement('div');
-      largeChange.className = 'large-change';
-      largeChange.appendChild(this.createTextFragment(largeInsertionTextBuffer));
-      newContainer.appendChild(largeChange);
+      newContainer.appendChild(
+        createLargeChangeIndicator('insertion', largeInsertionTextBuffer.length)
+      );
 
       isBufferingLargeInsertion = false;
       largeInsertionTextBuffer = '';
+    };
+
+    const flushLargeDeletionBuffer = () => {
+      if (!isBufferingLargeDeletion) return;
+
+      oldContainer.appendChild(
+        createLargeChangeIndicator('deletion', largeDeletionTextBuffer.length)
+      );
+
+      isBufferingLargeDeletion = false;
+      largeDeletionTextBuffer = '';
+    };
+
+    const flushLargeChangeBuffers = () => {
+      flushLargeInsertionBuffer();
+      flushLargeDeletionBuffer();
     };
 
     diffs.forEach((diffTuple) => {
@@ -288,18 +325,25 @@ const DiffHighlighter = {
 
       switch (operation) {
         case 0: // DIFF_EQUAL
-          flushLargeInsertionBuffer();
+          flushLargeChangeBuffers();
           this.appendText(oldContainer, formattedPlainText);
           this.appendText(newContainer, formattedPlainText);
           break;
 
         case -1: // DIFF_DELETE
           flushLargeInsertionBuffer();
-          this.appendText(oldContainer, formattedPlainText, 'deleted');
+          if (diffText.length > largeChangeLimit) {
+            isBufferingLargeDeletion = true;
+            largeDeletionTextBuffer += formattedPlainText;
+          } else {
+            flushLargeDeletionBuffer();
+            this.appendText(oldContainer, formattedPlainText, 'deleted');
+          }
           break;
 
         case 1: // DIFF_INSERT
-          if (diffText.length > 50) {
+          flushLargeDeletionBuffer();
+          if (diffText.length > largeChangeLimit) {
             isBufferingLargeInsertion = true;
             largeInsertionTextBuffer += formattedPlainText;
           } else {
@@ -315,8 +359,8 @@ const DiffHighlighter = {
       }
     });
 
-    // Handle any remaining large insertion at the end
-    flushLargeInsertionBuffer();
+    // Handle any remaining large changes at the end
+    flushLargeChangeBuffers();
 
     diffContainer.appendChild(oldContainer);
     diffContainer.appendChild(newContainer);
@@ -471,7 +515,8 @@ const MessageHandler = {
         sendResponse({status: "success"});
       } else if (request.action === "checkExtensionState") {
         const data = await chrome.storage.sync.get('extensionEnabled');
-        if (data.extensionEnabled) {
+        if (data.extensionEnabled !== false) {
+          await DiffHighlighter.removeEnhancements();
           await DiffHighlighter.enhanceDiff();
           DiffHighlighter.setupObserver();
         } else {

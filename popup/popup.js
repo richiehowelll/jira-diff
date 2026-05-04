@@ -5,8 +5,13 @@ if (typeof browser !== 'undefined' && typeof chrome === 'undefined') {
 /* --------------------------------------- */
 
 document.addEventListener('DOMContentLoaded', () => {
+  const DEFAULT_LARGE_CHANGE_LIMIT = 500;
+  const MIN_LARGE_CHANGE_LIMIT = 1;
+  const MAX_LARGE_CHANGE_LIMIT = 10000;
+
   const els = {
     toggle: document.getElementById('extensionToggle'),
+    largeChangeLimit: document.getElementById('largeChangeLimit'),
     domainInput: document.getElementById('allowedDomains'),
     addDomain: document.getElementById('addDomain'),
     domainList: document.getElementById('domainList'),
@@ -24,6 +29,12 @@ document.addEventListener('DOMContentLoaded', () => {
     .filter(domain => /^[a-z0-9.-]+$/.test(domain) && !domain.includes('..')))];
 
   const isAtlassianDomain = domain => domain === 'atlassian.net' || domain.endsWith('.atlassian.net');
+
+  const normalizeLargeChangeLimit = value => {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return DEFAULT_LARGE_CHANGE_LIMIT;
+    return Math.min(Math.max(parsed, MIN_LARGE_CHANGE_LIMIT), MAX_LARGE_CHANGE_LIMIT);
+  };
 
   const domainToOrigins = domain => {
     // Request the bare domain and its subdomains without requiring broad install-time access.
@@ -177,13 +188,19 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const loadDomains = async () => {
-    const data = await storageGet(['extensionEnabled', 'allowedDomains']);
+    const data = await storageGet([
+      'extensionEnabled',
+      'allowedDomains',
+      'largeChangeLimit',
+      'largeInsertionLimit'
+    ]);
     const configuredDomains = Array.isArray(data.allowedDomains)
       ? data.allowedDomains
       : normalizeDomains(data.allowedDomains);
     const grantedDomains = await permissionDomains();
 
     els.toggle.checked = data.extensionEnabled !== false;
+    els.largeChangeLimit.value = normalizeLargeChangeLimit(data.largeChangeLimit ?? data.largeInsertionLimit);
     state.domains = [...new Set([...configuredDomains, ...grantedDomains])];
     renderDomains();
 
@@ -196,6 +213,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   els.toggle.addEventListener('change', () => {
     chrome.storage.sync.set({ extensionEnabled: els.toggle.checked });
+    applyToCurrentTab(state.domains);
+  });
+  els.largeChangeLimit.addEventListener('change', async () => {
+    const largeChangeLimit = normalizeLargeChangeLimit(els.largeChangeLimit.value);
+    els.largeChangeLimit.value = largeChangeLimit;
+    await storageSet({ largeChangeLimit });
+    setStatus('Large change limit saved.', 'success');
     applyToCurrentTab(state.domains);
   });
   els.addDomain.addEventListener('click', addDomain);
