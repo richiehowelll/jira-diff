@@ -16,11 +16,8 @@ const normalizeLargeChangeLimit = value => {
 };
 
 const getLargeChangeLimit = async () => {
-  const { largeChangeLimit, largeInsertionLimit } = await chrome.storage.sync.get([
-    'largeChangeLimit',
-    'largeInsertionLimit'
-  ]);
-  return normalizeLargeChangeLimit(largeChangeLimit ?? largeInsertionLimit);
+  const { largeChangeLimit } = await chrome.storage.sync.get('largeChangeLimit');
+  return normalizeLargeChangeLimit(largeChangeLimit);
 };
 
 const normalizeDomainPattern = domain => {
@@ -283,19 +280,53 @@ const DiffHighlighter = {
     let isBufferingLargeDeletion = false;
     let largeDeletionTextBuffer = '';
 
-    const createLargeChangeIndicator = (type, characterCount) => {
+    const createLargeChangeToggle = (type, text) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = `large-change-wrapper large-${type}-wrapper`;
+
       const indicator = document.createElement('div');
       indicator.className = `large-change-indicator large-${type}-indicator`;
-      indicator.textContent = `Large ${type} (${characterCount} characters)`;
-      return indicator;
+
+      const label = document.createElement('span');
+      label.textContent = `Large ${type} (${text.length} characters)`;
+
+      const toggleButton = document.createElement('button');
+      toggleButton.type = 'button';
+      toggleButton.className = 'large-change-toggle';
+      toggleButton.textContent = 'Show full text';
+      toggleButton.setAttribute('aria-expanded', 'false');
+
+      let fullTextElement = null;
+
+      toggleButton.addEventListener('click', () => {
+        const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+
+        if (isExpanded) {
+          fullTextElement?.remove();
+          fullTextElement = null;
+          toggleButton.textContent = 'Show full text';
+          toggleButton.setAttribute('aria-expanded', 'false');
+          return;
+        }
+
+        fullTextElement = document.createElement('div');
+        fullTextElement.className = `large-change-full-text large-${type}-full-text`;
+        fullTextElement.appendChild(this.createTextFragment(text));
+        wrapper.appendChild(fullTextElement);
+        toggleButton.textContent = 'Hide full text';
+        toggleButton.setAttribute('aria-expanded', 'true');
+      });
+
+      indicator.append(label, toggleButton);
+      wrapper.appendChild(indicator);
+
+      return wrapper;
     };
 
     const flushLargeInsertionBuffer = () => {
       if (!isBufferingLargeInsertion) return;
 
-      newContainer.appendChild(
-        createLargeChangeIndicator('insertion', largeInsertionTextBuffer.length)
-      );
+      newContainer.appendChild(createLargeChangeToggle('insertion', largeInsertionTextBuffer));
 
       isBufferingLargeInsertion = false;
       largeInsertionTextBuffer = '';
@@ -304,9 +335,7 @@ const DiffHighlighter = {
     const flushLargeDeletionBuffer = () => {
       if (!isBufferingLargeDeletion) return;
 
-      oldContainer.appendChild(
-        createLargeChangeIndicator('deletion', largeDeletionTextBuffer.length)
-      );
+      oldContainer.appendChild(createLargeChangeToggle('deletion', largeDeletionTextBuffer));
 
       isBufferingLargeDeletion = false;
       largeDeletionTextBuffer = '';

@@ -191,16 +191,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const data = await storageGet([
       'extensionEnabled',
       'allowedDomains',
-      'largeChangeLimit',
-      'largeInsertionLimit'
+      'largeChangeLimit'
     ]);
     const configuredDomains = Array.isArray(data.allowedDomains)
       ? data.allowedDomains
       : normalizeDomains(data.allowedDomains);
     const grantedDomains = await permissionDomains();
+    const largeChangeLimit = normalizeLargeChangeLimit(data.largeChangeLimit);
 
     els.toggle.checked = data.extensionEnabled !== false;
-    els.largeChangeLimit.value = normalizeLargeChangeLimit(data.largeChangeLimit ?? data.largeInsertionLimit);
+    els.largeChangeLimit.value = largeChangeLimit;
     state.domains = [...new Set([...configuredDomains, ...grantedDomains])];
     renderDomains();
 
