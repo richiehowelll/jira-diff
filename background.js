@@ -108,6 +108,25 @@ chrome.runtime.onStartup?.addListener(() => {
   });
 });
 
+// The permission prompt often closes the popup before it can save the domain.
+// Persist newly granted origins here, where the code keeps running.
+chrome.permissions.onAdded?.addListener(async permissions => {
+  const granted = parseDomainPatterns(permissions?.origins || []).filter(d => !isAtlassianDomain(d));
+  if (!granted.length) return;
+  const { allowedDomains } = await chrome.storage.sync.get('allowedDomains');
+  const current = parseDomainPatterns(allowedDomains);
+  const next = [...new Set([...current, ...granted])];
+  if (next.length !== current.length) {
+    await chrome.storage.sync.set({ allowedDomains: next }); // triggers sync via onChanged
+  } else {
+    await syncCustomDomainContentScript();
+  }
+});
+
+chrome.permissions.onRemoved?.addListener(() => {
+  syncCustomDomainContentScript().catch(err => console.error('Failed to resync content scripts:', err));
+});
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'sync' || !changes.allowedDomains) return;
 

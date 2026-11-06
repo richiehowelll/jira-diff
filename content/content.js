@@ -43,7 +43,7 @@ const parseDomainPatterns = raw => {
 const getAllowedDomainPatterns = async () => {
   const { allowedDomains } = await chrome.storage.sync.get('allowedDomains');
   const patterns = parseDomainPatterns(allowedDomains);
-  return patterns.length ? patterns : ['atlassian.net'];
+  return [...new Set(['atlassian.net', ...patterns])];
 };
 
 const urlMatchesAllowedDomain = async url => {

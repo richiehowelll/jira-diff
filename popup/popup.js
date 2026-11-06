@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const isHostAllowed = (url, domains) => {
     try {
       const host = new URL(url).hostname.toLowerCase();
-      const patterns = domains.length ? domains : ['atlassian.net'];
+      const patterns = ['atlassian.net', ...domains];
       return patterns.some(pattern => host === pattern || host.endsWith(`.${pattern}`));
     } catch {
       return false;
