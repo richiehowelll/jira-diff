@@ -27,7 +27,7 @@ const normalizeDomainPattern = domain => {
   return normalized || null;
 }
 
-const isValidDomainPattern = domain => /^[a-z0-9.-]+$/.test(domain) && !domain.includes('..');
+const isValidDomainPattern = domain => typeof domain === 'string' && /^[a-z0-9.-]+$/.test(domain) && !domain.includes('..');
 
 const parseDomainPatterns = raw => {
   if (!raw) return [];

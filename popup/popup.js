@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const normalizeDomains = value => [...new Set(String(value || '')
     .split(/[\n,]+/)
     .map(domain => domain.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/^\*\./, '').toLowerCase())
-    .filter(domain => /^[a-z0-9.-]+$/.test(domain) && !domain.includes('..')))];
+    .filter(domain => typeof domain === 'string' && /^[a-z0-9.-]+$/.test(domain) && !domain.includes('..')))];
 
   const isAtlassianDomain = domain => domain === 'atlassian.net' || domain.endsWith('.atlassian.net');
 
