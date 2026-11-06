@@ -201,3 +201,7 @@
   cursor: pointer;
 }
 .gd-fold button:hover { background: #b6e3ff; }
+
+/* Jira Data Center history table */
+td.gd-dc-cell { padding: 4px 0 8px !important; }
+td.gd-dc-cell .enhanced-diff.gd-root { margin-top: 0; }

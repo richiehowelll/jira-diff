@@ -113,6 +113,8 @@ const DiffHighlighter = {
       const { extensionEnabled } = await chrome.storage.sync.get('extensionEnabled');
       if (extensionEnabled === false) return;
 
+      await this.enhanceDataCenterDiffs();
+
       const diffContainers = this.findDiffContainers();
 
       for (const [index, container] of diffContainers.entries()) {
@@ -161,6 +163,59 @@ const DiffHighlighter = {
       console.error('Error enhancing diff:', error);
     } finally {
       this.isEnhancing = false;
+    }
+  },
+
+  /* ---------- Jira Data Center / Server: History table "Original: … | New: …" ---------- */
+  DC_OLD_LABEL: /^\s*(Original|Ursprünglich|Ursprungswert|Alt|Original value)\s*:\s*/i,
+  DC_NEW_LABEL: /^\s*(New|Neu|New value)\s*:\s*/i,
+  DC_FIELDS: ['description', 'beschreibung'],
+
+  // Read a cell's text with its rendered line breaks, minus the leading "Original:" / "New:" label.
+  dcCellText(td, labelRe) {
+    const clone = td.cloneNode(true);
+    const label = clone.querySelector('strong, b, .hist-label');
+    if (label && /:\s*$/.test(label.textContent)) label.remove();
+    clone.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+    const text = clone.textContent.replace(/\u00A0/g, ' ').replace(labelRe, '');
+    return text.replace(/^\n+/, '').replace(/\s+$/, '');
+  },
+
+  findDataCenterRows() {
+    const rows = [];
+    for (const td of document.querySelectorAll('td')) {
+      if (td.closest('.enhanced-diff')) continue;
+      const next = td.nextElementSibling;
+      if (!next || next.tagName !== 'TD') continue;
+      if (!this.DC_OLD_LABEL.test(td.textContent) || !this.DC_NEW_LABEL.test(next.textContent)) continue;
+      const tr = td.parentElement;
+      const nameCell = td.previousElementSibling;
+      const field = (nameCell?.textContent || '').trim().toLowerCase();
+      if (!this.DC_FIELDS.includes(field)) continue;
+      rows.push({ tr, oldTd: td, newTd: next });
+    }
+    return rows;
+  },
+
+  async enhanceDataCenterDiffs() {
+    const rows = this.findDataCenterRows();
+    for (const [index, { tr, oldTd, newTd }] of rows.entries()) {
+      if (tr.querySelector('.enhanced-diff')) continue;
+      const oldText = this.dcCellText(oldTd, this.DC_OLD_LABEL);
+      const newText = this.dcCellText(newTd, this.DC_NEW_LABEL);
+      if (!oldText && !newText) continue;
+
+      const containerId = `diff-container-${Date.now()}-dc${index}`;
+      tr.id = containerId;
+      await chrome.storage.local.set({ [containerId]: tr.innerHTML });
+
+      const enhancedDiff = await GitDiffView.create(oldText, newText, true);
+      const cell = document.createElement('td');
+      cell.colSpan = 2;
+      cell.className = 'gd-dc-cell';
+      cell.appendChild(enhancedDiff);
+      oldTd.replaceWith(cell);
+      newTd.remove();
     }
   },
 
@@ -507,7 +562,7 @@ appendText(parentElement, text, wrapperClassName = null) {
       if (!isExtensionValid()) return;
       const enhancedDiffs = document.querySelectorAll('.enhanced-diff');
       for (const enhancedDiff of enhancedDiffs) {
-        const parentContainer = enhancedDiff.closest('div[id^="diff-container-"]');
+        const parentContainer = enhancedDiff.closest('[id^="diff-container-"]');
         if (parentContainer) {
           const containerId = parentContainer.id;
           const result = await chrome.storage.local.get(containerId);
