@@ -114,7 +114,6 @@ const DiffHighlighter = {
       if (extensionEnabled === false) return;
 
       const diffContainers = this.findDiffContainers();
-      const largeChangeLimit = await getLargeChangeLimit();
 
       for (const [index, container] of diffContainers.entries()) {
         if (!container || !(container instanceof HTMLElement)) continue;
@@ -134,13 +133,17 @@ const DiffHighlighter = {
           continue;
         }
 
+        const raw = await RawText.resolve(oldText, newText);
+        if (!container.isConnected || container.children.length !== 3) continue;
+        if (container.querySelector('.enhanced-diff')) continue;
+
         const containerId = `diff-container-${Date.now()}-${index}`;
         container.id = containerId;
 
         const originalContent = container.innerHTML;
         await chrome.storage.local.set({ [containerId]: originalContent });
 
-        const enhancedDiff = this.createEnhancedDiff(oldText, newText, largeChangeLimit);
+        const enhancedDiff = await GitDiffView.create(raw.oldText, raw.newText, raw.exact);
 
         container.replaceChild(enhancedDiff, container.children[0]);
         if (container.children[1]) container.removeChild(container.children[1]);
@@ -574,6 +577,306 @@ function debounce(func, wait) {
     timeout = setTimeout(later, wait);
   };
 }
+
+/* ---------- raw description text from the Jira changelog API ---------- */
+const RawText = {
+  cache: new Map(), // issueKey -> { fetchedAt, items: [{ from, to }] }
+
+  squash: s => String(s ?? '').replace(/\s+/g, ''),
+
+  getIssueKey() {
+    const keyRe = /^[A-Z][A-Z0-9_]+-\d+$/;
+    const url = new URL(window.location.href);
+    const selected = url.searchParams.get('selectedIssue');
+    if (selected && keyRe.test(selected)) return selected;
+    const m = url.pathname.match(/\/browse\/([A-Z][A-Z0-9_]+-\d+)/);
+    return m ? m[1] : null;
+  },
+
+  async fetchDescriptionChanges(key) {
+    const items = [];
+    let startAt = 0;
+    for (let page = 0; page < 50; page++) {
+      const res = await fetch(
+        `${location.origin}/rest/api/3/issue/${encodeURIComponent(key)}/changelog?startAt=${startAt}&maxResults=100`,
+        { credentials: 'include', headers: { Accept: 'application/json' } }
+      );
+      if (!res.ok) throw new Error(`Changelog request failed: ${res.status}`);
+      const data = await res.json();
+      for (const entry of data.values || []) {
+        for (const item of entry.items || []) {
+          if (item.fieldId === 'description' || item.field === 'description') {
+            items.push({ from: item.fromString || '', to: item.toString || '' });
+          }
+        }
+      }
+      startAt += (data.values || []).length;
+      if (data.isLast || !(data.values || []).length || startAt >= (data.total ?? Infinity)) break;
+    }
+    return items;
+  },
+
+  findMatch(items, oldSq, newSq) {
+    return items.find(i => this.squash(i.from) === oldSq && this.squash(i.to) === newSq);
+  },
+
+  async resolve(oldText, newText) {
+    const key = this.getIssueKey();
+    if (key) {
+      try {
+        const oldSq = this.squash(oldText);
+        const newSq = this.squash(newText);
+        let cached = this.cache.get(key);
+        let match = cached && this.findMatch(cached.items, oldSq, newSq);
+        if (!match && (!cached || Date.now() - cached.fetchedAt > 3000)) {
+          cached = { fetchedAt: Date.now(), items: await this.fetchDescriptionChanges(key) };
+          this.cache.set(key, cached);
+          match = this.findMatch(cached.items, oldSq, newSq);
+        }
+        if (match) return { oldText: match.from, newText: match.to, exact: true };
+      } catch (e) {
+        console.warn('[DH] Could not load raw description from changelog:', e);
+      }
+    }
+    return { oldText: this.guessLines(oldText), newText: this.guessLines(newText), exact: false };
+  },
+
+  // Fallback: rebuild line breaks from Jira wiki markup markers (headings, bullets, tables).
+  guessLines(text) {
+    return String(text ?? '')
+      .replace(/\s+(?=(h[1-6]\.\s|\*+\s|#+\s|\|\||-\s))/g, '\n')
+      .trim();
+  }
+};
+
+/* ---------- GitHub-style line diff ---------- */
+const GitDiffView = {
+  CONTEXT: 3,
+
+  splitLines(text) {
+    const t = String(text ?? '').replace(/\r\n?/g, '\n');
+    const lines = t.split('\n');
+    if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+    return lines;
+  },
+
+  // Build a model: list of { kind: 'eq', oldNo, newNo, text } | { kind: 'hunk', dels: [...], ins: [...] }
+  buildModel(oldText, newText) {
+    const dmp = new diff_match_patch();
+    const a = this.splitLines(oldText).join('\n') + '\n';
+    const b = this.splitLines(newText).join('\n') + '\n';
+    const lc = dmp.diff_linesToChars_(a, b);
+    const diffs = dmp.diff_main(lc.chars1, lc.chars2, false);
+    dmp.diff_charsToLines_(diffs, lc.lineArray);
+
+    const model = [];
+    let oldNo = 1, newNo = 1;
+    let hunk = null;
+    const flush = () => { if (hunk) { model.push(hunk); hunk = null; } };
+
+    for (const { 0: op, 1: text } of diffs) {
+      const lines = this.splitLines(text);
+      if (op === 0) {
+        flush();
+        for (const line of lines) model.push({ kind: 'eq', oldNo: oldNo++, newNo: newNo++, text: line });
+      } else {
+        hunk = hunk || { kind: 'hunk', dels: [], ins: [] };
+        for (const line of lines) {
+          if (op === -1) hunk.dels.push({ no: oldNo++, text: line });
+          else hunk.ins.push({ no: newNo++, text: line });
+        }
+      }
+    }
+    flush();
+
+    // Word-level highlights for paired lines
+    for (const item of model) {
+      if (item.kind !== 'hunk') continue;
+      const n = Math.min(item.dels.length, item.ins.length);
+      for (let i = 0; i < n; i++) {
+        const d = item.dels[i], s = item.ins[i];
+        const wd = dmp.diff_main(d.text, s.text);
+        dmp.diff_cleanupSemantic(wd);
+        const parts = wd.map(x => [x[0], x[1]]);
+        const same = parts.filter(x => x[0] === 0).reduce((acc, x) => acc + x[1].length, 0);
+        if (same < 0.4 * Math.max(d.text.length, s.text.length)) continue;
+        d.parts = parts.filter(x => x[0] !== 1);
+        s.parts = parts.filter(x => x[0] !== -1);
+      }
+    }
+    return model;
+  },
+
+  // Group model into segments; long runs of unchanged lines become collapsible
+  segment(model) {
+    const segs = [];
+    let i = 0;
+    while (i < model.length) {
+      if (model[i].kind !== 'eq') { segs.push({ type: 'hunk', item: model[i] }); i++; continue; }
+      let j = i;
+      while (j < model.length && model[j].kind === 'eq') j++;
+      const run = model.slice(i, j);
+      const lead = i === 0 ? 0 : this.CONTEXT;
+      const trail = j === model.length ? 0 : this.CONTEXT;
+      if (run.length > lead + trail + 1) {
+        if (lead) segs.push({ type: 'eq', rows: run.slice(0, lead) });
+        segs.push({ type: 'fold', rows: run.slice(lead, run.length - trail) });
+        if (trail) segs.push({ type: 'eq', rows: run.slice(run.length - trail) });
+      } else {
+        segs.push({ type: 'eq', rows: run });
+      }
+      i = j;
+    }
+    return segs;
+  },
+
+  textCell(sign, line, cls) {
+    const td = document.createElement('td');
+    td.className = `gd-code ${cls || ''}`;
+    const signEl = document.createElement('span');
+    signEl.className = 'gd-sign';
+    signEl.textContent = sign;
+    td.appendChild(signEl);
+    if (!line) return td;
+    if (line.parts) {
+      for (const [op, t] of line.parts) {
+        if (op === 0) td.appendChild(document.createTextNode(t));
+        else {
+          const mark = document.createElement('span');
+          mark.className = op === -1 ? 'gd-word-del' : 'gd-word-ins';
+          mark.textContent = t;
+          td.appendChild(mark);
+        }
+      }
+    } else {
+      td.appendChild(document.createTextNode(line.text));
+    }
+    return td;
+  },
+
+  numCell(no, cls) {
+    const td = document.createElement('td');
+    td.className = `gd-num ${cls || ''}`;
+    td.textContent = no ?? '';
+    return td;
+  },
+
+  row(...cells) {
+    const tr = document.createElement('tr');
+    cells.forEach(c => tr.appendChild(c));
+    return tr;
+  },
+
+  eqRow(r, mode) {
+    return mode === 'split'
+      ? this.row(this.numCell(r.oldNo), this.textCell(' ', r), this.numCell(r.newNo), this.textCell(' ', r))
+      : this.row(this.numCell(r.oldNo), this.numCell(r.newNo), this.textCell(' ', r));
+  },
+
+  hunkRows(h, mode) {
+    const rows = [];
+    if (mode === 'split') {
+      const n = Math.max(h.dels.length, h.ins.length);
+      for (let i = 0; i < n; i++) {
+        const d = h.dels[i], s = h.ins[i];
+        rows.push(this.row(
+          this.numCell(d?.no, d ? 'gd-del' : 'gd-empty'),
+          this.textCell(d ? '-' : '', d, d ? 'gd-del' : 'gd-empty'),
+          this.numCell(s?.no, s ? 'gd-ins' : 'gd-empty'),
+          this.textCell(s ? '+' : '', s, s ? 'gd-ins' : 'gd-empty')
+        ));
+      }
+    } else {
+      for (const d of h.dels) rows.push(this.row(this.numCell(d.no, 'gd-del'), this.numCell('', 'gd-del'), this.textCell('-', d, 'gd-del')));
+      for (const s of h.ins) rows.push(this.row(this.numCell('', 'gd-ins'), this.numCell(s.no, 'gd-ins'), this.textCell('+', s, 'gd-ins')));
+    }
+    return rows;
+  },
+
+  render(root, mode) {
+    root.querySelector('.gd-table')?.remove();
+    root.querySelectorAll('.gd-mode button').forEach(b => b.classList.toggle('gd-active', b.dataset.mode === mode));
+
+    const table = document.createElement('table');
+    table.className = `gd-table gd-${mode}`;
+    const colgroup = document.createElement('colgroup');
+    const cols = mode === 'split' ? ['gd-c-num', 'gd-c-code', 'gd-c-num', 'gd-c-code'] : ['gd-c-num', 'gd-c-num', 'gd-c-code'];
+    cols.forEach(c => { const col = document.createElement('col'); col.className = c; colgroup.appendChild(col); });
+    table.appendChild(colgroup);
+    const tbody = document.createElement('tbody');
+    table.appendChild(tbody);
+
+    for (const seg of root._segments) {
+      if (seg.type === 'eq') seg.rows.forEach(r => tbody.appendChild(this.eqRow(r, mode)));
+      else if (seg.type === 'hunk') this.hunkRows(seg.item, mode).forEach(r => tbody.appendChild(r));
+      else if (seg.type === 'fold') {
+        if (seg.expanded) { seg.rows.forEach(r => tbody.appendChild(this.eqRow(r, mode))); continue; }
+        const tr = document.createElement('tr');
+        tr.className = 'gd-fold';
+        const td = document.createElement('td');
+        td.colSpan = cols.length;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = `↕ Show ${seg.rows.length} unchanged line${seg.rows.length === 1 ? '' : 's'}`;
+        btn.addEventListener('click', () => { seg.expanded = true; this.render(root, root._mode); });
+        td.appendChild(btn);
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+    }
+    root._mode = mode;
+    root.appendChild(table);
+  },
+
+  async create(oldText, newText, exact) {
+    const root = document.createElement('div');
+    root.className = 'enhanced-diff gd-root';
+
+    let model;
+    try {
+      model = this.buildModel(oldText, newText);
+    } catch (e) {
+      console.error('Failed to compute line diff:', e);
+      return DiffHighlighter.fallbackDiffDisplay(oldText, newText);
+    }
+    root._segments = this.segment(model);
+
+    const added = model.filter(m => m.kind === 'hunk').reduce((a, h) => a + h.ins.length, 0);
+    const removed = model.filter(m => m.kind === 'hunk').reduce((a, h) => a + h.dels.length, 0);
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'gd-toolbar';
+    const stats = document.createElement('span');
+    stats.className = 'gd-stats';
+    stats.innerHTML = `<span class="gd-stat-ins">+${added}</span> <span class="gd-stat-del">−${removed}</span>`;
+    toolbar.appendChild(stats);
+    if (!exact) {
+      const note = document.createElement('span');
+      note.className = 'gd-note';
+      note.textContent = 'Line breaks estimated (raw text unavailable)';
+      toolbar.appendChild(note);
+    }
+    const modeBox = document.createElement('span');
+    modeBox.className = 'gd-mode';
+    for (const [m, label] of [['split', 'Split'], ['unified', 'Unified']]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.mode = m;
+      b.textContent = label;
+      b.addEventListener('click', async () => {
+        await chrome.storage.sync.set({ diffViewMode: m });
+        document.querySelectorAll('.gd-root').forEach(el => GitDiffView.render(el, m));
+      });
+      modeBox.appendChild(b);
+    }
+    toolbar.appendChild(modeBox);
+    root.appendChild(toolbar);
+
+    const { diffViewMode } = await chrome.storage.sync.get('diffViewMode');
+    this.render(root, diffViewMode === 'unified' ? 'unified' : 'split');
+    return root;
+  }
+};
 
 // Initialize
 DiffHighlighter.debouncedEnhanceDiff = debounce(DiffHighlighter.enhanceDiff.bind(DiffHighlighter), 250);
